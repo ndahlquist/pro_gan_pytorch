@@ -41,10 +41,7 @@ for i, filename in enumerate(tqdm(files)):
     im = cv2.imread(filename)
     #im = cv2.resize(im, (512, 512))
 
-    # parse from "samples/gen_0_60_1.png"
-    print(filename)
     (epoch,) = parse("samples/{:d}.png", filename)
-    print(epoch)
 
     text = '%d' % (epoch)
     cv2.putText(im, text, bottomLeftCornerOfText, font, fontScale, fontColor, lineType)
