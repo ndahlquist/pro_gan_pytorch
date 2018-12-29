@@ -8,6 +8,7 @@ import timeit
 import copy
 import numpy as np
 import torch as th
+import torch
 
 
 # ========================================================================================
@@ -26,7 +27,7 @@ class Generator(th.nn.Module):
         :param use_eql: whether to use equalized learning rate
         """
         from torch.nn import ModuleList
-        from pro_gan_pytorch.CustomLayers import GenGeneralConvBlock, GenInitialBlock
+        from CustomLayers import GenGeneralConvBlock, GenInitialBlock
         from torch.nn.functional import interpolate
 
         super(Generator, self).__init__()
@@ -49,7 +50,7 @@ class Generator(th.nn.Module):
 
         # create the ToRGB layers for various outputs:
         if self.use_eql:
-            from pro_gan_pytorch.CustomLayers import _equalized_conv2d
+            from CustomLayers import _equalized_conv2d
             self.toRGB = lambda in_channels: \
                 _equalized_conv2d(in_channels, 3, (1, 1), bias=True)
         else:
@@ -94,13 +95,13 @@ class Generator(th.nn.Module):
             for block in self.layers[:depth - 1]:
                 y = block(y)
 
-            residual = self.rgb_converters[depth - 1](self.temporaryUpsampler(y))
-            straight = self.rgb_converters[depth](self.layers[depth - 1](y))
+            residual = torch.nn.functional.sigmoid(self.rgb_converters[depth - 1](self.temporaryUpsampler(y)))
+            straight = torch.nn.functional.sigmoid(self.rgb_converters[depth](self.layers[depth - 1](y)))
 
             out = (alpha * straight) + ((1 - alpha) * residual)
 
         else:
-            out = self.rgb_converters[0](y)
+            out = torch.nn.functional.sigmoid(self.rgb_converters[0](y))
 
         return out
 
@@ -123,7 +124,7 @@ class Discriminator(th.nn.Module):
         :param use_eql: whether to use equalized learning rate
         """
         from torch.nn import ModuleList, AvgPool2d
-        from pro_gan_pytorch.CustomLayers import DisGeneralConvBlock, DisFinalBlock
+        from CustomLayers import DisGeneralConvBlock, DisFinalBlock
 
         super(Discriminator, self).__init__()
 
@@ -144,7 +145,7 @@ class Discriminator(th.nn.Module):
 
         # create the fromRGB layers for various inputs:
         if self.use_eql:
-            from pro_gan_pytorch.CustomLayers import _equalized_conv2d
+            from CustomLayers import _equalized_conv2d
             self.fromRGB = lambda out_channels: \
                 _equalized_conv2d(3, out_channels, (1, 1), bias=True)
         else:
