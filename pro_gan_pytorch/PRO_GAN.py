@@ -95,13 +95,13 @@ class Generator(th.nn.Module):
             for block in self.layers[:depth - 1]:
                 y = block(y)
 
-            residual = torch.nn.functional.sigmoid(self.rgb_converters[depth - 1](self.temporaryUpsampler(y)))
-            straight = torch.nn.functional.sigmoid(self.rgb_converters[depth](self.layers[depth - 1](y)))
+            residual = self.rgb_converters[depth - 1](self.temporaryUpsampler(y))
+            straight = self.rgb_converters[depth](self.layers[depth - 1](y))
 
             out = (alpha * straight) + ((1 - alpha) * residual)
 
         else:
-            out = torch.nn.functional.sigmoid(self.rgb_converters[0](y))
+            out = self.rgb_converters[0](y)
 
         return out
 
