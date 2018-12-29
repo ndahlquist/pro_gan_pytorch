@@ -1,6 +1,7 @@
 """ Module containing custom layers """
 
 import torch as th
+import torch
 
 
 # extending Conv2D and Deconv2D layers for equalized learning rate logic
@@ -184,19 +185,21 @@ class GenInitialBlock(th.nn.Module):
 
         if use_eql:
             self.conv_1 = _equalized_deconv2d(in_channels, in_channels, (4, 4), bias=True)
-            self.conv_2 = _equalized_conv2d(in_channels, in_channels, (3, 3),
+            self.conv_2 = _equalized_conv2d(in_channels+1, in_channels, (3, 3),
                                             pad=1, bias=True)
 
         else:
             from torch.nn import Conv2d, ConvTranspose2d
             self.conv_1 = ConvTranspose2d(in_channels, in_channels, (4, 4), bias=True)
-            self.conv_2 = Conv2d(in_channels, in_channels, (3, 3), padding=1, bias=True)
+            self.conv_2 = Conv2d(in_channels+1, in_channels, (3, 3), padding=1, bias=True)
 
         # Pixelwise feature vector normalization operation
         self.pixNorm = PixelwiseNorm()
 
         # leaky_relu:
         self.lrelu = LeakyReLU(0.2)
+
+        self.noise = torch.tensor(0)
 
     def forward(self, x):
         """
@@ -209,6 +212,11 @@ class GenInitialBlock(th.nn.Module):
 
         # perform the forward computations:
         y = self.lrelu(self.conv_1(y))
+
+        # Add a noise channel.
+        sampled_noise = self.noise.repeat(y.shape[0], 1, y.shape[2], y.shape[3]).cuda().float().normal_()
+        y = torch.cat((y, sampled_noise), 1)
+
         y = self.lrelu(self.conv_2(y))
 
         # apply pixel norm
@@ -237,13 +245,13 @@ class GenGeneralConvBlock(th.nn.Module):
         if use_eql:
             self.conv_1 = _equalized_conv2d(in_channels, out_channels, (3, 3),
                                             pad=1, bias=True)
-            self.conv_2 = _equalized_conv2d(out_channels, out_channels, (3, 3),
+            self.conv_2 = _equalized_conv2d(out_channels+1, out_channels, (3, 3),
                                             pad=1, bias=True)
         else:
             from torch.nn import Conv2d
             self.conv_1 = Conv2d(in_channels, out_channels, (3, 3),
                                  padding=1, bias=True)
-            self.conv_2 = Conv2d(out_channels, out_channels, (3, 3),
+            self.conv_2 = Conv2d(out_channels+1, out_channels, (3, 3),
                                  padding=1, bias=True)
 
         # Pixelwise feature vector normalization operation
@@ -251,6 +259,8 @@ class GenGeneralConvBlock(th.nn.Module):
 
         # leaky_relu:
         self.lrelu = LeakyReLU(0.2)
+
+        self.noise = torch.tensor(0)
 
     def forward(self, x):
         """
@@ -260,6 +270,11 @@ class GenGeneralConvBlock(th.nn.Module):
         """
         y = self.upsample(x)
         y = self.pixNorm(self.lrelu(self.conv_1(y)))
+
+        # Add a noise channel.
+        sampled_noise = self.noise.repeat(y.shape[0], 1, y.shape[2], y.shape[3]).cuda().float().normal_()
+        y = torch.cat((y, sampled_noise), 1)
+
         y = self.pixNorm(self.lrelu(self.conv_2(y)))
 
         return y
