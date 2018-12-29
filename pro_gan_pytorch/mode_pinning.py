@@ -1,7 +1,7 @@
 
 import torch as th
 import torchvision
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import Dataloader
 import os
 
@@ -20,15 +20,7 @@ transforms = torchvision.transforms.Compose([
 dataset_dir = os.environ['DATASET_DIR']
 dataset = Dataloader.FlatDirectoryImageDataset(dataset_dir + '/pexels/landscapes', transform=transforms)
 
-for i, d in enumerate(dataset):
-    plt.imshow(d.permute(1, 2, 0).numpy())
-    plt.show()
-    if i > 10:
-         break
 
-
-
-# In[2]:
 
 
 import torch
