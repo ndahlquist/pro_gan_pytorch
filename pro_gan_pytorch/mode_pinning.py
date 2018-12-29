@@ -110,7 +110,9 @@ def optimize_generator_with_anchors():
     loss.backward()
     anchor_optimizer.step()
     
-    return loss.item()
+    float_loss = loss.item()
+    del loss
+    return float_loss
 
 
 # In[6]:
@@ -142,8 +144,10 @@ def optimize_discriminator(noise):
     disc_optim.zero_grad()
     loss.backward()
     disc_optim.step()
-    
-    return loss.item()
+
+    float_loss = loss.item()
+    del loss
+    return float_loss
 
 
 noise = torch.randn(batch_size, latent_size, device=device)
@@ -170,8 +174,10 @@ def optimize_generator(noise):
     gen_optim.zero_grad()
     loss.backward()
     gen_optim.step()
-    
-    return loss.item()
+
+    float_loss = loss.item()
+    del loss
+    return float_loss
 
 
 eval_noise = torch.randn(64, latent_size, device=device)
