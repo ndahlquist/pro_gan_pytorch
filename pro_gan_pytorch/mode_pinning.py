@@ -1,12 +1,10 @@
-
-import torch as th
+import torch
 import torchvision
-#import matplotlib.pyplot as plt
 import Dataloader
 import os
 
 # select the device to be used for training
-device = th.device("cuda" if th.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 transforms = torchvision.transforms.Compose([
     torchvision.transforms.RandomRotation(3),
@@ -21,18 +19,12 @@ dataset_dir = os.environ['DATASET_DIR']
 dataset = Dataloader.FlatDirectoryImageDataset(dataset_dir + '/pexels/landscapes', transform=transforms)
 
 
-
-
-import torch
-import torchvision.models as models
-
-vgg = models.vgg13_bn(pretrained=True).to(device)
+vgg = torchvision.models.vgg13_bn(pretrained=True).to(device)
 
 # freeze all model parameters
 vgg.eval()
 for param in vgg.parameters():
     param.requires_grad = False
-
 
 def extract_features(x):
   # x = normalize(x)  # TODO
@@ -139,10 +131,10 @@ d = PRO_GAN.Discriminator(6, latent_size).to(device)
 disc_optim = torch.optim.Adam(d.parameters())
 wgan_gp = Losses.WGAN_GP(d, use_gp=True)
 
-def optimize_discriminator():
+
+def optimize_discriminator(noise):
     real_samples = next(iter(dataloader)).to(device)
-    
-    noise = torch.randn(batch_size, latent_size, device=device)
+
     fake_samples = g(noise, 5, 0).detach()
 
     loss = wgan_gp.dis_loss(real_samples, fake_samples, 5, 0)
@@ -153,8 +145,12 @@ def optimize_discriminator():
     
     return loss.item()
 
+
+noise = torch.randn(batch_size, latent_size, device=device)
+
 for i in range(5):
-    print(optimize_discriminator())
+    noise.normal_()
+    print(optimize_discriminator(noise))
     
 
 
@@ -164,10 +160,9 @@ for i in range(5):
 gen_optim = torch.optim.Adam(g.parameters())
 
 
-def optimize_generator():
+def optimize_generator(noise):
     real_samples = next(iter(dataloader)).to(device)
-    
-    noise = torch.randn(batch_size, latent_size, device=device)
+
     fake_samples = g(noise, 5, 0).detach()
 
     loss = wgan_gp.gen_loss(real_samples, fake_samples, 0, 5)
@@ -178,14 +173,16 @@ def optimize_generator():
     
     return loss.item()
 
+
 eval_noise = torch.randn(64, latent_size, device=device)
 
 for i in tqdm(range(50 * 1000)):
     
     # For the first phase, just train using the anchors. This is faster.
     if i > 500:
-        disc_loss = optimize_discriminator()
-        gen_loss = optimize_generator()
+        noise.normal_()
+        disc_loss = optimize_discriminator(noise)
+        gen_loss = optimize_generator(noise)
     
     gen_loss_2 = optimize_generator_with_anchors()
     
