@@ -258,7 +258,7 @@ class GenGeneralConvBlock(th.nn.Module):
         self.pixNorm = PixelwiseNorm()
 
         # leaky_relu:
-        self.lrelu = LeakyReLU(0.2)
+        self.lrelu = LeakyReLU(0.2, inplace=True)
 
         self.noise = torch.tensor(0)
 
@@ -379,7 +379,7 @@ class DisFinalBlock(th.nn.Module):
             self.conv_3 = Conv2d(in_channels, 1, (1, 1), bias=True)
 
         # leaky_relu:
-        self.lrelu = LeakyReLU(0.2)
+        self.lrelu = LeakyReLU(0.2, inplace=True)
 
     def forward(self, x):
         """
@@ -437,7 +437,7 @@ class ConDisFinalBlock(th.nn.Module):
         self.label_embedder = Embedding(num_classes, in_channels, max_norm=1)
 
         # leaky_relu:
-        self.lrelu = LeakyReLU(0.2)
+        self.lrelu = LeakyReLU(0.2, inplace=True)
 
     def forward(self, x, labels):
         """
@@ -498,7 +498,7 @@ class DisGeneralConvBlock(th.nn.Module):
         self.downSampler = AvgPool2d(2)
 
         # leaky_relu:
-        self.lrelu = LeakyReLU(0.2)
+        self.lrelu = LeakyReLU(0.2, inplace=True)
 
     def forward(self, x):
         """
