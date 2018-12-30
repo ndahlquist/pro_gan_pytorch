@@ -86,7 +86,7 @@ class ModePinningGan():
         save_image(samples, img_file, nrow=int(np.sqrt(len(samples))), normalize=True)
 
     def optimize_generator_with_anchors(self):
-        generated = g(self.anchor_latent_vectors, 5, 0)
+        generated = self.g(self.anchor_latent_vectors, 5, 0)
         assert self.anchor_targets.shape == generated.shape, "generated shape %s does not match target shape %s" % (str(generated.shape), str(self.anchor_targets.shape))
         loss = torch.mean(torch.abs(self.anchor_targets - generated))
         perceptual_loss = torch.mean(torch.abs(self.extract_features(self.anchor_targets) - self.extract_features(generated)))
