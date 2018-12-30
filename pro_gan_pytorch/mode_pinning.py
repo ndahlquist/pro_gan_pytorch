@@ -137,11 +137,11 @@ wgan_gp = Losses.WGAN_GP(d, use_gp=True)
 def optimize_discriminator(noise, real_samples):
     fake_samples = g(noise, 5, 0).detach()
 
-    wgan_gp.dis_loss(real_samples, fake_samples, 5, 0)
+    loss = wgan_gp.dis_loss(real_samples, fake_samples, 5, 0)
 
-    #disc_optim.zero_grad()
-    #loss.backward()
-    #disc_optim.step()
+    disc_optim.zero_grad()
+    loss.backward()
+    disc_optim.step()
 
 
 #optimize_discriminator(noise, anchor_targets)
@@ -179,7 +179,7 @@ for i in tqdm(range(50 * 1000)):
         batch = batch.to(device)
 
         noise = torch.randn(batch.shape[0], latent_size, device=device)
-        #optimize_discriminator(noise, batch)
+        optimize_discriminator(noise, batch)
         #optimize_generator(noise, batch)
 
     optimize_generator_with_anchors()
