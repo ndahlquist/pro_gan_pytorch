@@ -185,7 +185,7 @@ for i in tqdm(range(50 * 1000)):
         optimize_discriminator(noise, batch)
         optimize_generator(noise, batch)
 
-    optimize_generator_with_anchors()
+    #optimize_generator_with_anchors()
 
     with torch.no_grad():
         generated = g(eval_noise, 5, 0).detach()
