@@ -120,7 +120,7 @@ class ModePinningGan():
         self.gen_optim.step()
 
     def train(self, epochs=50*1000):
-        mem_used = None
+        max_mem_used = 0
 
         for epoch in tqdm(range(epochs)):
 
@@ -140,10 +140,10 @@ class ModePinningGan():
                 filename = 'samples/%d.png' % epoch
                 self.create_grid(generated, filename)
 
-            if epoch == 5:
-                mem_used = torch.cuda.max_memory_allocated()
-            elif epoch > 5 and torch.cuda.max_memory_allocated() > mem_used:
-                print("Might be leaking memory? " + torch.cuda.max_memory_allocated())
+            # Test for memory leaks.
+            if torch.cuda.max_memory_allocated() > max_mem_used:
+                max_mem_used = torch.cuda.max_memory_allocated()
+                print("New CUDA allocation: " + str(max_mem_used))
 
 
     """def interpolate_latent_vectors(vector_a, vector_b):
