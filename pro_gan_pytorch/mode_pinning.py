@@ -98,12 +98,14 @@ class ModePinningGan():
         self.anchor_optimizer.step()
 
     def optimize_discriminator(self, real_samples):
-        noise = torch.randn(real_samples.shape[0], self.latent_size, device=self.device)
-        fake_samples = self.g(noise, 5, 0).detach()
+        self.disc_optim.zero_grad()
+
+        with torch.no_grad():
+            noise = torch.randn(int(real_samples.shape[0]), self.latent_size, device=self.device)
+            fake_samples = self.g(noise, 5, 0).detach()
 
         loss = self.wgan.dis_loss(real_samples, fake_samples, 5, 0)
 
-        self.disc_optim.zero_grad()
         loss.backward()
         self.disc_optim.step()
 
