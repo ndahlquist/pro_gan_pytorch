@@ -8,7 +8,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 transforms = torchvision.transforms.Compose([
     torchvision.transforms.RandomRotation(3),
-    torchvision.transforms.RandomCrop((128, 128)), # TODO: Random scale too
+    torchvision.transforms.RandomCrop((128, 128)),  # TODO: Random scale too
     torchvision.transforms.Resize((128, 128)),
     torchvision.transforms.RandomHorizontalFlip(),
     torchvision.transforms.ColorJitter(.2, .2, .1, .01),
@@ -49,7 +49,7 @@ anchor_targets = next(iter(dataloader)).to(device)
 #    plt.imshow(anchor_targets[i].permute(1, 2, 0).cpu().numpy())
 #    plt.show()
 
-batch_size = 32
+batch_size = 64
 dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=True)
 
 
@@ -109,17 +109,17 @@ def optimize_generator_with_anchors():
     anchor_optimizer.zero_grad()
     loss.backward()
     anchor_optimizer.step()
-    
-    float_loss = loss.item()
+
     del loss
-    return float_loss
+    del generated
+    del perceptual_loss
 
 
 # In[6]:
 
 
 for i in tqdm(range(3)):
-    loss = optimize_generator_with_anchors()
+    optimize_generator_with_anchors()
     
 
 
@@ -145,9 +145,9 @@ def optimize_discriminator(noise):
     loss.backward()
     disc_optim.step()
 
-    float_loss = loss.item()
+    del real_samples
+    del fake_samples
     del loss
-    return float_loss
 
 
 noise = torch.randn(batch_size, latent_size, device=device)
@@ -175,10 +175,9 @@ def optimize_generator(noise):
     loss.backward()
     gen_optim.step()
 
-    float_loss = loss.item()
     del loss
-    return float_loss
-
+    del real_samples
+    del fake_samples
 
 eval_noise = torch.randn(64, latent_size, device=device)
 
@@ -187,15 +186,17 @@ for i in tqdm(range(50 * 1000)):
     # For the first phase, just train using the anchors. This is faster.
     if i > 500:
         noise.normal_()
-        disc_loss = optimize_discriminator(noise)
-        gen_loss = optimize_generator(noise)
+        optimize_discriminator(noise)
+        optimize_generator(noise)
     
-    gen_loss_2 = optimize_generator_with_anchors()
+    optimize_generator_with_anchors()
     
     generated = g(eval_noise, 5, 0).detach()
     
     filename = 'samples/%d.png' % i
     create_grid(generated, filename)
+
+    torch.cuda.empty_cache()
     #if i % 100 == 0:
     #    plt.rcParams['figure.figsize'] = [10, 10]
     #    plt.imshow(cv2.imread(filename))
