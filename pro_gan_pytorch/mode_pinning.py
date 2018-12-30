@@ -192,12 +192,14 @@ for i in tqdm(range(50 * 1000)):
         optimize_generator(noise)
     
     optimize_generator_with_anchors()
-    
-    generated = g(eval_noise, 5, 0).detach()
-    
-    filename = 'samples/%d.png' % i
-    create_grid(generated, filename)
 
+    with torch.no_grad():
+        generated = g(eval_noise, 5, 0).detach()
+
+        filename = 'samples/%d.png' % i
+        create_grid(generated, filename)
+
+    torch.cuda.synchronize()
     torch.cuda.empty_cache()
     #if i % 100 == 0:
     #    plt.rcParams['figure.figsize'] = [10, 10]
