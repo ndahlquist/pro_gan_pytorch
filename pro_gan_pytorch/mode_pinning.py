@@ -40,15 +40,14 @@ class ModePinningGan():
 
         self.anchor_latent_vectors = torch.randn(num_pins, self.latent_size, requires_grad=True, device=self.device)
 
+        self.g = PRO_GAN.Generator(depth=6, latent_size=self.latent_size).to(self.device)
+        self.d = PRO_GAN.Discriminator(6, self.latent_size).to(self.device)
+
         # anchor_optimizer = torch.optim.Adam(list(g.parameters()) + [anchor_latent_vectors], lr=.001)
-        self.anchor_optimizer = torch.optim.Adam(list(g.parameters()), lr=.001)
+        self.anchor_optimizer = torch.optim.Adam(list(self.g.parameters()), lr=.001)
 
 
         self.dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=True)
-
-        self.g = PRO_GAN.Generator(depth=6, latent_size=self.latent_size).to(self.device)
-
-        self.d = PRO_GAN.Discriminator(6, self.latent_size).to(self.device)
 
         self.disc_optim = torch.optim.Adam(self.d.parameters())
         self.gen_optim = torch.optim.Adam(self.g.parameters())
@@ -100,7 +99,7 @@ class ModePinningGan():
 
     def optimize_discriminator(self, real_samples):
         noise = torch.randn(real_samples.shape[0], self.latent_size, device=self.device)
-        fake_samples = g(noise, 5, 0).detach()
+        fake_samples = self.g(noise, 5, 0).detach()
 
         loss = self.wgan.dis_loss(real_samples, fake_samples, 5, 0)
 
@@ -110,7 +109,7 @@ class ModePinningGan():
 
     def optimize_generator(self, real_samples):
         noise = torch.randn(real_samples.shape[0], self.latent_size, device=self.device)
-        fake_samples = g(noise, 5, 0).detach()
+        fake_samples = self.g(noise, 5, 0).detach()
 
         loss = self.wgan.gen_loss(real_samples, fake_samples, 0, 5)
 
