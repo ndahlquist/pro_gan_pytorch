@@ -179,13 +179,14 @@ for i in tqdm(range(50 * 1000)):
     # For the first phase, just train using the anchors. This is faster.
     #if i > 500:
     for batch in dataloader:
-        batch = batch.to(device)
+        #batch = batch.to(device)
 
-        noise = torch.randn(batch.shape[0], latent_size, device=device)
-        optimize_discriminator(noise, batch)
-        optimize_generator(noise, batch)
+        #noise = torch.randn(batch.shape[0], latent_size, device=device)
+        #optimize_discriminator(noise, batch)
+        #optimize_generator(noise, batch)
+        pass
 
-    #optimize_generator_with_anchors()
+    optimize_generator_with_anchors()
 
     with torch.no_grad():
         generated = g(eval_noise, 5, 0).detach()
