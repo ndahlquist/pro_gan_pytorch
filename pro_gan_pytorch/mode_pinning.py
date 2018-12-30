@@ -125,14 +125,14 @@ class ModePinningGan():
         for epoch in tqdm(range(epochs)):
 
             # For the first phase, just train using the anchors. This is faster.
-            #if i > 500:
-            for batch in self.dataloader:
-                batch = batch.to(self.device)
-
-                self.optimize_discriminator(batch)
-                self.optimize_generator(batch)
-
-            self.optimize_generator_with_anchors()
+            if epoch < 500:
+                self.optimize_generator_with_anchors()
+            else:
+                for batch in self.dataloader:
+                    batch = batch.to(self.device)
+                    self.optimize_discriminator(batch)
+                    self.optimize_generator(batch)
+                self.optimize_generator_with_anchors()
 
             with torch.no_grad():
                 generated = self.g(self.eval_noise, 5, 0).detach()
