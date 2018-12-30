@@ -49,7 +49,7 @@ anchor_targets = next(iter(dataloader)).to(device)
 #    plt.imshow(anchor_targets[i].permute(1, 2, 0).cpu().numpy())
 #    plt.show()
 
-batch_size = 64
+batch_size = 32
 dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=True)
 
 
