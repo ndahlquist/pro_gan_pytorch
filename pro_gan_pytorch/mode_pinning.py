@@ -120,6 +120,8 @@ class ModePinningGan():
         self.gen_optim.step()
 
     def train(self, epochs=50*1000):
+        mem_used = None
+
         for epoch in tqdm(range(epochs)):
 
             # For the first phase, just train using the anchors. This is faster.
@@ -138,11 +140,11 @@ class ModePinningGan():
                 filename = 'samples/%d.png' % epoch
                 self.create_grid(generated, filename)
 
-            print(torch.cuda.max_memory_allocated())
-            #if i % 100 == 0:
-            #    plt.rcParams['figure.figsize'] = [10, 10]
-            #    plt.imshow(cv2.imread(filename))
-            #    plt.show()
+            if epoch == 5:
+                mem_used = torch.cuda.max_memory_allocated()
+            elif epoch > 5 and torch.cuda.max_memory_allocated() > mem_used:
+                print("Might be leaking memory? " + torch.cuda.max_memory_allocated())
+
 
     """def interpolate_latent_vectors(vector_a, vector_b):
         vectors = torch.zeros(64, latent_size, device=device)
