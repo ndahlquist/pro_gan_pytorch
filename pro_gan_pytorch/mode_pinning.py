@@ -137,7 +137,7 @@ wgan_gp = Losses.WGAN_GP(d, use_gp=True)
 def optimize_discriminator(noise, real_samples):
     fake_samples = g(noise, 5, 0).detach()
 
-    #loss = wgan_gp.dis_loss(real_samples, fake_samples, 5, 0)
+    loss = wgan_gp.dis_loss(real_samples, fake_samples, 5, 0)
 
     #disc_optim.zero_grad()
     #loss.backward()
