@@ -154,7 +154,7 @@ noise = torch.randn(batch_size, latent_size, device=device)
 
 for i in range(5):
     noise.normal_()
-    print(optimize_discriminator(noise))
+    optimize_discriminator(noise)
     
 
 
@@ -179,6 +179,8 @@ def optimize_generator(noise):
     del real_samples
     del fake_samples
 
+import gc
+
 eval_noise = torch.randn(64, latent_size, device=device)
 
 for i in tqdm(range(50 * 1000)):
@@ -201,6 +203,11 @@ for i in tqdm(range(50 * 1000)):
     #    plt.rcParams['figure.figsize'] = [10, 10]
     #    plt.imshow(cv2.imread(filename))
     #    plt.show()
+
+    if i > 700:
+        for obj in gc.get_objects():
+            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+                print(type(obj), obj.size())
     
     
 
