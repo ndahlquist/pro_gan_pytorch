@@ -147,11 +147,7 @@ def optimize_discriminator(noise, real_samples):
     del loss
 
 
-noise = torch.randn(batch_size, latent_size, device=device)
-
-
-
-optimize_discriminator(noise, anchor_targets)
+#optimize_discriminator(noise, anchor_targets)
     
 
 
@@ -181,13 +177,13 @@ eval_noise = torch.randn(64, latent_size, device=device)
 for i in tqdm(range(50 * 1000)):
 
     # For the first phase, just train using the anchors. This is faster.
-    if i > 500:
-        for batch in dataloader:
-            batch = batch.to(device)
+    #if i > 500:
+    for batch in dataloader:
+        batch = batch.to(device)
 
-            noise.normal_()
-            optimize_discriminator(noise, batch)
-            optimize_generator(noise, batch)
+        noise = torch.randn(batch.shape[0], latent_size, device=device)
+        optimize_discriminator(noise, batch)
+        optimize_generator(noise, batch)
 
     optimize_generator_with_anchors()
 
