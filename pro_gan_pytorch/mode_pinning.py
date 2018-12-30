@@ -193,8 +193,7 @@ for i in tqdm(range(50 * 1000)):
         filename = 'samples/%d.png' % i
         create_grid(generated, filename)
 
-    torch.cuda.synchronize()
-    torch.cuda.empty_cache()
+    print(torch.cuda.max_memory_allocated())
     #if i % 100 == 0:
     #    plt.rcParams['figure.figsize'] = [10, 10]
     #    plt.imshow(cv2.imread(filename))
