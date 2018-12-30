@@ -134,9 +134,7 @@ disc_optim = torch.optim.Adam(d.parameters())
 wgan_gp = Losses.WGAN_GP(d, use_gp=True)
 
 
-def optimize_discriminator(noise):
-    real_samples = next(iter(dataloader)).to(device)
-
+def optimize_discriminator(noise, real_samples):
     fake_samples = g(noise, 5, 0).detach()
 
     loss = wgan_gp.dis_loss(real_samples, fake_samples, 5, 0)
@@ -145,16 +143,15 @@ def optimize_discriminator(noise):
     loss.backward()
     disc_optim.step()
 
-    del real_samples
     del fake_samples
     del loss
 
 
 noise = torch.randn(batch_size, latent_size, device=device)
 
-for i in range(5):
-    noise.normal_()
-    optimize_discriminator(noise)
+
+
+optimize_discriminator(noise, anchor_targets)
     
 
 
@@ -164,8 +161,7 @@ for i in range(5):
 gen_optim = torch.optim.Adam(g.parameters())
 
 
-def optimize_generator(noise):
-    real_samples = next(iter(dataloader)).to(device)
+def optimize_generator(noise, real_samples):
 
     fake_samples = g(noise, 5, 0).detach()
 
@@ -176,7 +172,6 @@ def optimize_generator(noise):
     gen_optim.step()
 
     del loss
-    del real_samples
     del fake_samples
 
 import gc
@@ -184,13 +179,16 @@ import gc
 eval_noise = torch.randn(64, latent_size, device=device)
 
 for i in tqdm(range(50 * 1000)):
-    
+
     # For the first phase, just train using the anchors. This is faster.
     if i > 500:
-        noise.normal_()
-        optimize_discriminator(noise)
-        optimize_generator(noise)
-    
+        for batch in dataloader:
+            batch = batch.to(device)
+
+            noise.normal_()
+            optimize_discriminator(noise, batch)
+            optimize_generator(noise, batch)
+
     optimize_generator_with_anchors()
 
     with torch.no_grad():
@@ -208,8 +206,11 @@ for i in tqdm(range(50 * 1000)):
 
     if i > 700:
         for obj in gc.get_objects():
-            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
-                print(type(obj), obj.size())
+            try:
+                if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+                    print(type(obj), obj.size())
+            except:
+                print("failed to query object " + str(obj))
     
     
 
