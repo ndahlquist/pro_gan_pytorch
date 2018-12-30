@@ -131,7 +131,7 @@ class ModePinningGan():
             self.optimize_generator_with_anchors()
 
             with torch.no_grad():
-                generated = g(self.eval_noise, 5, 0).detach()
+                generated = self.g(self.eval_noise, 5, 0).detach()
 
                 filename = 'samples/%d.png' % epoch
                 self.create_grid(generated, filename)
