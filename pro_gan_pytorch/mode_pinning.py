@@ -181,7 +181,6 @@ for i in tqdm(range(50 * 1000)):
         noise = torch.randn(batch.shape[0], latent_size, device=device)
         optimize_discriminator(noise, batch)
         #optimize_generator(noise, batch)
-        pass
 
     optimize_generator_with_anchors()
 
