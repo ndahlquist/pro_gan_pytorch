@@ -51,7 +51,7 @@ class ModePinningGan():
 
         self.disc_optim = torch.optim.Adam(self.d.parameters())
         self.gen_optim = torch.optim.Adam(self.g.parameters())
-        self.wgan = Losses.WGAN_GP(self.d, use_gp=False)  # TODO: use_gp=True
+        self.wgan = Losses.WGAN_GP(self.d, use_gp=False)  # TODO: use_gp=True seems to be causing memory leak
 
         self.eval_noise = torch.randn(64, self.latent_size, device=self.device)
 
@@ -128,7 +128,7 @@ class ModePinningGan():
                 batch = batch.to(self.device)
 
                 self.optimize_discriminator(batch)
-                #optimize_generator(noise, batch)
+                self.optimize_generator(batch)
 
             self.optimize_generator_with_anchors()
 
