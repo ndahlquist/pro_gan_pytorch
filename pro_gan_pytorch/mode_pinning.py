@@ -41,7 +41,7 @@ def extract_features(x):
 # In[3]:
 
 
-num_pins = 64
+num_pins = 32
 
 dataloader = torch.utils.data.DataLoader(dataset, num_pins, shuffle=True)
 anchor_targets = next(iter(dataloader)).to(device)
