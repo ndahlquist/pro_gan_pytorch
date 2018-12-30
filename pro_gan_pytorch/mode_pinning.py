@@ -2,226 +2,159 @@ import torch
 import torchvision
 import Dataloader
 import os
-
-# select the device to be used for training
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-transforms = torchvision.transforms.Compose([
-    torchvision.transforms.RandomRotation(3),
-    torchvision.transforms.RandomCrop((128, 128)),  # TODO: Random scale too
-    torchvision.transforms.Resize((128, 128)),
-    torchvision.transforms.RandomHorizontalFlip(),
-    torchvision.transforms.ColorJitter(.2, .2, .1, .01),
-    torchvision.transforms.ToTensor(),
-  ])
-
-dataset_dir = os.environ['DATASET_DIR']
-dataset = Dataloader.FlatDirectoryImageDataset(dataset_dir + '/pexels/landscapes', transform=transforms)
-
-
-vgg = torchvision.models.vgg13_bn(pretrained=True).to(device)
-
-# freeze all model parameters
-vgg.eval()
-for param in vgg.parameters():
-    param.requires_grad = False
-
-def extract_features(x):
-  # x = normalize(x)  # TODO
-  #print(x.min(), x.max())
-  
-  # This is an approximation of the transform that the torchvision models want.
-  x = (x - .5) * .3
-
-  for i in range(12):
-    x = vgg.features[i](x)
-  return x
-
-
-# In[3]:
-
-
-num_pins = 32
-
-dataloader = torch.utils.data.DataLoader(dataset, num_pins, shuffle=True)
-anchor_targets = next(iter(dataloader)).to(device)
-#for i in range(10):
-#    plt.imshow(anchor_targets[i].permute(1, 2, 0).cpu().numpy())
-#    plt.show()
-
-batch_size = 32
-dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=True)
-
-
-
-# In[4]:
-
-
-def create_grid(samples, img_file, scale_factor=1):
-    """
-    utility function to create a grid of GAN samples
-    :param samples: generated samples for storing
-    :param scale_factor: factor for upscaling the image
-    :param img_file: name of file to write
-    :return: None (saves a file)
-    """
-    from torchvision.utils import save_image
-    from torch.nn.functional import interpolate
-
-    # upsample the image
-    if scale_factor > 1:
-        samples = interpolate(samples, scale_factor=scale_factor)
-
-    # save the images:
-    save_image(samples, img_file, nrow=int(np.sqrt(len(samples))), normalize=True)
-
-
-# In[5]:
-
-
 import PRO_GAN
-import torch
-
-#import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
-import cv2
-
-latent_size = 128
-
-g = PRO_GAN.Generator(depth=6, latent_size=latent_size).to(device)
-
-anchor_latent_vectors = torch.randn(num_pins, latent_size, requires_grad=True, device=device)
-
-#anchor_optimizer = torch.optim.Adam(list(g.parameters()) + [anchor_latent_vectors], lr=.001)
-anchor_optimizer = torch.optim.Adam(list(g.parameters()), lr=.001)
-
-anchor_targets = anchor_targets.to(device)
-
-def optimize_generator_with_anchors():
-    generated = g(anchor_latent_vectors, 5, 0)
-    assert anchor_targets.shape == generated.shape, "generated shape %s does not match target shape %s" % (str(generated.shape), str(anchor_targets.shape))
-    loss = torch.mean(torch.abs(anchor_targets - generated))
-    perceptual_loss = torch.mean(torch.abs(extract_features(anchor_targets) - extract_features(generated)))
-
-    loss += perceptual_loss
-    
-    anchor_optimizer.zero_grad()
-    loss.backward()
-    anchor_optimizer.step()
-
-    del loss
-    del generated
-    del perceptual_loss
-
-
-# In[6]:
-
-
-for i in tqdm(range(3)):
-    optimize_generator_with_anchors()
-    
-
-
-# In[ ]:
-
-
 import Losses
 
-d = PRO_GAN.Discriminator(6, latent_size).to(device)
+class ModePinningGan():
 
-disc_optim = torch.optim.Adam(d.parameters())
-wgan_gp = Losses.WGAN_GP(d, use_gp=True)
+    def __init__(self):
+
+        # select the device to be used for training
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        transforms = torchvision.transforms.Compose([
+            torchvision.transforms.RandomRotation(3),
+            torchvision.transforms.RandomCrop((128, 128)),  # TODO: Random scale too
+            torchvision.transforms.Resize((128, 128)),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ColorJitter(.2, .2, .1, .01),
+            torchvision.transforms.ToTensor(),
+          ])
+
+        dataset_dir = os.environ['DATASET_DIR']
+        dataset = Dataloader.FlatDirectoryImageDataset(dataset_dir + '/pexels/landscapes', transform=transforms)
+
+        self.vgg = torchvision.models.vgg13_bn(pretrained=True).to(self.device)
+        self.vgg.eval()
+        for param in self.vgg.parameters():
+            param.requires_grad = False
+
+        num_pins = 32
+        self.latent_size = 128
+        batch_size = 32
+
+        self.dataloader = torch.utils.data.DataLoader(dataset, num_pins, shuffle=True)
+        self.anchor_targets = next(iter(self.dataloader)).to(self.device)
+
+        self.anchor_latent_vectors = torch.randn(num_pins, self.latent_size, requires_grad=True, device=self.device)
+
+        # anchor_optimizer = torch.optim.Adam(list(g.parameters()) + [anchor_latent_vectors], lr=.001)
+        self.anchor_optimizer = torch.optim.Adam(list(g.parameters()), lr=.001)
 
 
-def optimize_discriminator(noise, real_samples):
-    fake_samples = g(noise, 5, 0).detach()
+        self.dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=True)
 
-    loss = wgan_gp.dis_loss(real_samples, fake_samples, 5, 0)
+        self.g = PRO_GAN.Generator(depth=6, latent_size=self.latent_size).to(self.device)
 
-    disc_optim.zero_grad()
-    loss.backward()
-    disc_optim.step()
+        self.d = PRO_GAN.Discriminator(6, self.latent_size).to(self.device)
 
+        self.disc_optim = torch.optim.Adam(self.d.parameters())
+        self.gen_optim = torch.optim.Adam(self.g.parameters())
+        self.wgan = Losses.WGAN_GP(self.d, use_gp=True)
 
-#optimize_discriminator(noise, anchor_targets)
-    
+        self.eval_noise = torch.randn(64, self.latent_size, device=self.device)
 
+    def extract_features(self, x):
+        # x = normalize(x)  # TODO
+        #print(x.min(), x.max())
 
-# In[ ]:
+        # This is an approximation of the transform that the torchvision models want.
+        x = (x - .5) * .3
 
+        for i in range(12):
+            x = self.vgg.features[i](x)
+        return x
 
-gen_optim = torch.optim.Adam(g.parameters())
+    @staticmethod
+    def create_grid(samples, img_file, scale_factor=1):
+        """
+        utility function to create a grid of GAN samples
+        :param samples: generated samples for storing
+        :param scale_factor: factor for upscaling the image
+        :param img_file: name of file to write
+        :return: None (saves a file)
+        """
+        from torchvision.utils import save_image
+        from torch.nn.functional import interpolate
 
+        # upsample the image
+        if scale_factor > 1:
+            samples = interpolate(samples, scale_factor=scale_factor)
 
-def optimize_generator(noise, real_samples):
+        # save the images:
+        save_image(samples, img_file, nrow=int(np.sqrt(len(samples))), normalize=True)
 
-    fake_samples = g(noise, 5, 0).detach()
+    def optimize_generator_with_anchors(self):
+        generated = g(self.anchor_latent_vectors, 5, 0)
+        assert self.anchor_targets.shape == generated.shape, "generated shape %s does not match target shape %s" % (str(generated.shape), str(self.anchor_targets.shape))
+        loss = torch.mean(torch.abs(self.anchor_targets - generated))
+        perceptual_loss = torch.mean(torch.abs(self.extract_features(self.anchor_targets) - self.extract_features(generated)))
 
-    loss = wgan_gp.gen_loss(real_samples, fake_samples, 0, 5)
+        loss += perceptual_loss
 
-    gen_optim.zero_grad()
-    loss.backward()
-    gen_optim.step()
+        self.anchor_optimizer.zero_grad()
+        loss.backward()
+        self.anchor_optimizer.step()
 
-    del loss
-    del fake_samples
+    def optimize_discriminator(self, real_samples):
+        noise = torch.randn(real_samples.shape[0], self.latent_size, device=self.device)
+        fake_samples = g(noise, 5, 0).detach()
 
-import gc
+        loss = self.wgan.dis_loss(real_samples, fake_samples, 5, 0)
 
-eval_noise = torch.randn(64, latent_size, device=device)
+        self.disc_optim.zero_grad()
+        loss.backward()
+        self.disc_optim.step()
 
-for i in tqdm(range(50 * 1000)):
+    def optimize_generator(self, real_samples):
+        noise = torch.randn(real_samples.shape[0], self.latent_size, device=self.device)
+        fake_samples = g(noise, 5, 0).detach()
 
-    # For the first phase, just train using the anchors. This is faster.
-    #if i > 500:
-    for batch in dataloader:
-        batch = batch.to(device)
+        loss = self.wgan.gen_loss(real_samples, fake_samples, 0, 5)
 
-        noise = torch.randn(batch.shape[0], latent_size, device=device)
-        optimize_discriminator(noise, batch)
-        #optimize_generator(noise, batch)
+        self.gen_optim.zero_grad()
+        loss.backward()
+        self.gen_optim.step()
 
-    optimize_generator_with_anchors()
+    def train(self, epochs=50*1000):
+        for epoch in tqdm(range(epochs)):
 
-    with torch.no_grad():
-        generated = g(eval_noise, 5, 0).detach()
+            # For the first phase, just train using the anchors. This is faster.
+            #if i > 500:
+            for batch in self.dataloader:
+                batch = batch.to(self.device)
 
-        filename = 'samples/%d.png' % i
+                self.optimize_discriminator(batch)
+                #optimize_generator(noise, batch)
+
+            self.optimize_generator_with_anchors()
+
+            with torch.no_grad():
+                generated = g(self.eval_noise, 5, 0).detach()
+
+                filename = 'samples/%d.png' % epoch
+                self.create_grid(generated, filename)
+
+            print(torch.cuda.max_memory_allocated())
+            #if i % 100 == 0:
+            #    plt.rcParams['figure.figsize'] = [10, 10]
+            #    plt.imshow(cv2.imread(filename))
+            #    plt.show()
+
+    """def interpolate_latent_vectors(vector_a, vector_b):
+        vectors = torch.zeros(64, latent_size, device=device)
+        for i in range(64):
+            vectors[i] = vector_b * (i / 64.0) + vector_a * (1 - i / 64.0)
+        generated = g(vectors, 4, 0)
+
+        filename = 'samples/interpolation.png'
         create_grid(generated, filename)
-
-    print(torch.cuda.max_memory_allocated())
-    #if i % 100 == 0:
-    #    plt.rcParams['figure.figsize'] = [10, 10]
-    #    plt.imshow(cv2.imread(filename))
-    #    plt.show()
-
-    if i > 700:
-        for obj in gc.get_objects():
-            try:
-                if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
-                    print(type(obj), obj.size())
-            except:
-                print("failed to query object " + str(obj))
-    
+        plt.rcParams['figure.figsize'] = [10, 10]
+        plt.imshow(cv2.imread(filename))
+        plt.show()"""
     
 
-
-# In[ ]:
-
-
-"""def interpolate_latent_vectors(vector_a, vector_b):
-    vectors = torch.zeros(64, latent_size, device=device)
-    for i in range(64):
-        vectors[i] = vector_b * (i / 64.0) + vector_a * (1 - i / 64.0)
-    generated = g(vectors, 4, 0)
-    
-    filename = 'samples/interpolation.png'
-    create_grid(generated, filename)
-    plt.rcParams['figure.figsize'] = [10, 10]
-    plt.imshow(cv2.imread(filename))
-    plt.show()
-        
-
-interpolate_latent_vectors(anchor_latent_vectors[0], anchor_latent_vectors[8])"""
-
+if __name__ == "__main__":
+    ModePinningGan().train()
