@@ -31,7 +31,7 @@ class ModePinningGan:
         for param in self.vgg.parameters():
             param.requires_grad = False
 
-        num_pins = 32
+        num_pins = len(dataset)
         self.latent_size = 128
         batch_size = 32
 
@@ -40,11 +40,11 @@ class ModePinningGan:
 
         self.anchor_latent_vectors = torch.randn(num_pins, self.latent_size, requires_grad=True, device=self.device)
 
-        self.g = PRO_GAN.Generator(depth=6, latent_size=self.latent_size).to(self.device)
-        self.d = PRO_GAN.Discriminator(6, self.latent_size).to(self.device)
+        self.depth = 6
+        self.g = PRO_GAN.Generator(depth=self.depth, latent_size=self.latent_size).to(self.device)
+        self.d = PRO_GAN.Discriminator(self.depth, self.latent_size).to(self.device)
 
-        # anchor_optimizer = torch.optim.Adam(list(g.parameters()) + [anchor_latent_vectors], lr=.001)
-        self.anchor_optimizer = torch.optim.Adam(list(self.g.parameters()), lr=.01)
+        self.anchor_optimizer = torch.optim.Adam(list(self.g.parameters()) + [self.anchor_latent_vectors], lr=.01)
 
         self.dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=True)
 
@@ -85,13 +85,15 @@ class ModePinningGan:
         # save the images:
         save_image(samples, img_file, nrow=int(np.sqrt(len(samples))), normalize=True)
 
-    def optimize_generator_with_anchors(self):
+    def optimize_generator_with_anchors(self, depth, alpha):
         self.anchor_optimizer.zero_grad()
 
-        generated = self.g(self.anchor_latent_vectors, 5, 0)
-        assert self.anchor_targets.shape == generated.shape, "generated shape %s does not match target shape %s" % (str(generated.shape), str(self.anchor_targets.shape))
-        loss = torch.mean(torch.abs(self.anchor_targets - generated))
-        perceptual_loss = torch.mean(torch.abs(self.extract_features(self.anchor_targets) - self.extract_features(generated)))
+        real_samples = self.__progressive_downsampling(self.anchor_targets, depth, alpha)
+
+        generated = self.g(self.anchor_latent_vectors, depth, alpha)
+        assert generated.shape == real_samples.shape, "generated shape %s does not match target shape %s" % (str(generated.shape), str(real_samples.shape))
+        loss = torch.mean(torch.abs(real_samples - generated))
+        perceptual_loss = torch.mean(torch.abs(self.extract_features(real_samples) - self.extract_features(generated)))
 
         loss += perceptual_loss
 
@@ -99,64 +101,175 @@ class ModePinningGan:
         self.anchor_optimizer.step()
         return loss.item()
 
-    def optimize_discriminator(self, real_samples):
+    def optimize_discriminator(self, real_samples, depth, alpha):
         self.disc_optim.zero_grad()
+
+        real_samples = self.__progressive_downsampling(real_samples, depth, alpha)
 
         with torch.no_grad():
             noise = torch.randn(int(real_samples.shape[0]), self.latent_size, device=self.device)
-            fake_samples = self.g(noise, 5, 0).detach()
+            fake_samples = self.g(noise, depth, alpha).detach()
 
-        loss = self.gan_loss.dis_loss(real_samples, fake_samples, 5, 0)
+        assert fake_samples.shape == real_samples.shape
+        loss = self.gan_loss.dis_loss(real_samples, fake_samples, depth, alpha)
 
         loss.backward()
         self.disc_optim.step()
 
         return loss.item()
 
-    def optimize_generator(self, real_samples):
+    def optimize_generator(self, real_samples, depth, alpha):
         self.gen_optim.zero_grad()
 
-        noise = torch.randn(real_samples.shape[0], self.latent_size, device=self.device)
-        fake_samples = self.g(noise, 5, 0).detach()
+        real_samples = self.__progressive_downsampling(real_samples, depth, alpha)
 
-        loss = self.gan_loss.gen_loss(real_samples, fake_samples, 5, 0)
+        noise = torch.randn(real_samples.shape[0], self.latent_size, device=self.device)
+        fake_samples = self.g(noise, depth, alpha).detach()
+
+        assert fake_samples.shape == real_samples.shape
+        loss = self.gan_loss.gen_loss(real_samples, fake_samples, depth, alpha)
 
         loss.backward()
         self.gen_optim.step()
 
         return loss.item()
 
-    def train(self, epochs=5000):
+    def __progressive_downsampling(self, real_batch, depth, alpha):
+        """
+        private helper for downsampling the original images in order to facilitate the
+        progressive growing of the layers.
+        :param real_batch: batch of real samples
+        :param depth: depth at which training is going on
+        :param alpha: current value of the fader alpha
+        :return: real_samples => modified real batch of samples
+        """
+
+        from torch.nn import AvgPool2d
+        from torch.nn.functional import interpolate
+
+        # downsample the real_batch for the given depth
+        down_sample_factor = int(np.power(2, self.depth - depth - 1))
+        prior_downsample_factor = max(int(np.power(2, self.depth - depth)), 0)
+
+        ds_real_samples = AvgPool2d(down_sample_factor)(real_batch)
+
+        if depth > 0:
+            prior_ds_real_samples = interpolate(AvgPool2d(prior_downsample_factor)(real_batch),
+                                                scale_factor=2)
+        else:
+            prior_ds_real_samples = ds_real_samples
+
+        # real samples are a combination of ds_real_samples and prior_ds_real_samples
+        real_samples = (alpha * ds_real_samples) + ((1 - alpha) * prior_ds_real_samples)
+
+        # return the so computed real_samples
+        return real_samples
+
+    def save_checkpoint(self, tag):
+        checkpoints_dir = os.path.expanduser(os.getenv('CHECKPOINTS_DIR', 'checkpoints')) + tag
+        os.makedirs(checkpoints_dir, exist_ok=True)
+        torch.save(self.g.state_dict(), checkpoints_dir + "/gen.pth")
+        torch.save(self.d.state_dict(), checkpoints_dir + "/disc.pth")
+
+    def restore_checkpoint(self, tag):
+        checkpoints_dir = os.path.expanduser(os.getenv('CHECKPOINTS_DIR', 'checkpoints')) + tag
+
+        if not os.path.exists(checkpoints_dir + "/gen.pth") or not os.path.exists(checkpoints_dir + "/disc.pth"):
+            print(os.listdir(checkpoints_dir))
+            return False
+
+        self.g.load_state_dict(torch.load(checkpoints_dir + "/gen.pth"))
+        self.d.load_state_dict(torch.load(checkpoints_dir + "/disc.pth"))
+        return True
+
+    def glo_pretrain(self):
+        print('{"chart": "Depth", "axis": "epochs"}')
+        print('{"chart": "GLO Loss", "axis": "epochs"}')
+
+        for epoch in tqdm(range(5000)):
+
+            # Training schedule.
+            if epoch < 1000:
+                # For the first phase, just train using the anchors. This is faster.
+                depth = epoch // 200
+                alpha = (epoch % 200) / 200.0
+            else:
+                self.save_checkpoint("glo_pretrain")
+                exit(0)
+
+            print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch, depth + alpha))
+
+            glo_loss = self.optimize_generator_with_anchors(depth, alpha)
+            print('{"chart": "GLO Loss", "x": %d, "y": %.04f}' % (epoch, glo_loss))
+
+            if epoch % 5 == 0:
+                with torch.no_grad():
+                    # Demo both random and pinned latent vectors.
+                    latent_vectors = torch.cat((self.anchor_latent_vectors[:18], self.eval_noise[:18]), 0)
+                    generated = self.g(latent_vectors, depth, alpha).detach()
+
+                    samples_dir = os.path.expanduser(os.getenv('SAMPLES_DIR', 'samples'))
+                    os.makedirs(samples_dir, exist_ok=True)
+                    filename = samples_dir + '/%05d.%s' % (epoch, "png" if depth < 3 else "jpg")
+                    self.create_grid(generated, filename)
+
+    def train(self):
         max_mem_used = 0
 
+        print('{"chart": "Depth", "axis": "epochs"}')
         print('{"chart": "GLO Loss", "axis": "epochs"}')
         print('{"chart": "Discriminator Loss", "axis": "epochs"}')
         print('{"chart": "Generator Loss", "axis": "epochs"}')
 
-        for epoch in tqdm(range(epochs)):
+        for epoch in tqdm(range(5000)):
 
-            # For the first phase, just train using the anchors. This is faster.
-            if epoch < 500:
-                glo_loss = self.optimize_generator_with_anchors()
-                print('{"chart": "GLO Loss", "x": %d, "y": %f}' % (epoch, glo_loss))
+            # Training schedule.
+            if epoch < 1000:
+                depth = 1
+                alpha = (epoch % 1000) / 1000.0
+            elif epoch < 2000:
+                depth = 2
+                alpha = (epoch % 1000) / 1000.0
             else:
-                d_loss = 0
-                g_loss = 0
-                for batch in self.dataloader:
-                    batch = batch.to(self.device)
-                    d_loss += self.optimize_discriminator(batch)
-                    g_loss += self.optimize_generator(batch)
-                print('{"chart": "Discriminator Loss", "x": %d, "y": %f}' % (epoch, d_loss))
-                print('{"chart": "Generator Loss", "x": %d, "y": %f}' % (epoch, g_loss))
-                glo_loss = self.optimize_generator_with_anchors()
-                print('{"chart": "GLO Loss", "x": %d, "y": %f}' % (epoch, glo_loss))
+                exit(0)
+            """elif epoch < 3000:
+                depth = 3
+                alpha = (epoch % 1000) / 1000.0
+                only_train_with_glo = False
+            elif epoch < 4000:
+                depth = 4
+                alpha = (epoch % 1000) / 1000.0
+                only_train_with_glo = False
+            else:
+                depth = 5
+                alpha = (epoch % 1000) / 1000.0
+                only_train_with_glo = False"""
 
-            with torch.no_grad():
-                generated = self.g(self.eval_noise, 5, 0).detach()
+            print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch, depth + alpha))
 
-                output_dir = os.path.expanduser(os.getenv('ARTIFACTS_DIR', 'samples'))
-                filename = output_dir+'/%05d.jpg' % epoch
-                self.create_grid(generated, filename)
+            if epoch % 5 == 0:
+                glo_loss = self.optimize_generator_with_anchors(depth, alpha)
+                print('{"chart": "GLO Loss", "x": %d, "y": %.04f}' % (epoch, glo_loss))
+
+            d_loss = 0
+            g_loss = 0
+            for batch in self.dataloader:
+                batch = batch.to(self.device)
+                d_loss += self.optimize_discriminator(batch, depth, alpha)
+                g_loss += self.optimize_generator(batch, depth, alpha)
+            print('{"chart": "Discriminator Loss", "x": %d, "y": %.04f}' % (epoch, d_loss))
+            print('{"chart": "Generator Loss", "x": %d, "y": %.04f}' % (epoch, g_loss))
+
+            if epoch % 5 == 0:
+                with torch.no_grad():
+                    # Demo both random and pinned latent vectors.
+                    latent_vectors = torch.cat((self.anchor_latent_vectors[:18], self.eval_noise[:18]), 0)
+                    generated = self.g(latent_vectors, depth, alpha).detach()
+
+                    samples_dir = os.path.expanduser(os.getenv('SAMPLES_DIR', 'samples'))
+                    os.makedirs(samples_dir, exist_ok=True)
+                    filename = samples_dir+'/%05d.%s' % (epoch, "png" if depth < 3 else "jpg")
+                    self.create_grid(generated, filename)
 
             # Test for CUDA memory leaks.
             if torch.cuda.device_count() > 0 and torch.cuda.max_memory_allocated() > max_mem_used:
@@ -178,4 +291,9 @@ class ModePinningGan:
 
 
 if __name__ == "__main__":
-    ModePinningGan().train()
+    gan = ModePinningGan()
+
+    if gan.restore_checkpoint("glo_pretrain"):
+        gan.train()
+    else:
+        gan.glo_pretrain()
