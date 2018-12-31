@@ -119,7 +119,7 @@ class ModePinningGan:
         noise = torch.randn(real_samples.shape[0], self.latent_size, device=self.device)
         fake_samples = self.g(noise, 5, 0).detach()
 
-        loss = self.gan_loss.gen_loss(real_samples, fake_samples, 0, 5)
+        loss = self.gan_loss.gen_loss(real_samples, fake_samples, 5, 0)
 
         loss.backward()
         self.gen_optim.step()
