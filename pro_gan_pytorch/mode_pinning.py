@@ -129,16 +129,16 @@ class ModePinningGan:
     def train(self, epochs=5000):
         max_mem_used = 0
 
+        print('{"chart": "GLO Loss", "axis": "epochs"}')
         print('{"chart": "Discriminator Loss", "axis": "epochs"}')
         print('{"chart": "Generator Loss", "axis": "epochs"}')
-        #print('{"chart": "GLO Loss", "axis": "epochs"}')
 
         for epoch in tqdm(range(epochs)):
 
             # For the first phase, just train using the anchors. This is faster.
             if epoch < 500:
                 glo_loss = self.optimize_generator_with_anchors()
-                #print('{"chart": "GLO Loss", "x": "%d", "y": "%f"}' % (epoch, glo_loss))
+                print('{"chart": "GLO Loss", "x": %d, "y": %f}' % (epoch, glo_loss))
             else:
                 d_loss = 0
                 g_loss = 0
@@ -146,10 +146,10 @@ class ModePinningGan:
                     batch = batch.to(self.device)
                     d_loss += self.optimize_discriminator(batch)
                     g_loss += self.optimize_generator(batch)
-                print('{"chart": "Discriminator Loss", "x": "%d", "y": "%f"}' % (epoch, d_loss))
-                print('{"chart": "Generator Loss", "x": "%d", "y": "%f"}' % (epoch, g_loss))
+                print('{"chart": "Discriminator Loss", "x": %d, "y": %f}' % (epoch, d_loss))
+                print('{"chart": "Generator Loss", "x": %d, "y": %f}' % (epoch, g_loss))
                 glo_loss = self.optimize_generator_with_anchors()
-                #print('{"chart": "GLO Loss", "x": "%d", "y": "%f"}' % (epoch, glo_loss))
+                print('{"chart": "GLO Loss", "x": %d, "y": %f}' % (epoch, glo_loss))
 
             with torch.no_grad():
                 generated = self.g(self.eval_noise, 5, 0).detach()
