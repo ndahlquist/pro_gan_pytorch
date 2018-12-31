@@ -7,7 +7,8 @@ import Losses
 import landscape_dataset
 import os
 
-class ModePinningGan():
+
+class ModePinningGan:
 
     def __init__(self):
 
@@ -157,8 +158,8 @@ class ModePinningGan():
                 filename = output_dir+'/%05d.jpg' % epoch
                 self.create_grid(generated, filename)
 
-            # Test for memory leaks.
-            if torch.cuda.max_memory_allocated() > max_mem_used:
+            # Test for CUDA memory leaks.
+            if torch.cuda.device_count() > 0 and torch.cuda.max_memory_allocated() > max_mem_used:
                 max_mem_used = torch.cuda.max_memory_allocated()
                 print("New CUDA allocation: " + str(max_mem_used))
 

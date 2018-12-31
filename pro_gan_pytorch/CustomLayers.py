@@ -214,7 +214,7 @@ class GenInitialBlock(th.nn.Module):
         y = self.lrelu(self.conv_1(y))
 
         # Add a noise channel.
-        sampled_noise = self.noise.repeat(y.shape[0], 1, y.shape[2], y.shape[3]).cuda().float().normal_()
+        sampled_noise = self.noise.repeat(y.shape[0], 1, y.shape[2], y.shape[3]).to(y.device).float().normal_()
         y = torch.cat((y, sampled_noise), 1)
 
         y = self.lrelu(self.conv_2(y))
@@ -272,7 +272,7 @@ class GenGeneralConvBlock(th.nn.Module):
         y = self.pixNorm(self.lrelu(self.conv_1(y)))
 
         # Add a noise channel.
-        sampled_noise = self.noise.repeat(y.shape[0], 1, y.shape[2], y.shape[3]).cuda().float().normal_()
+        sampled_noise = self.noise.repeat(y.shape[0], 1, y.shape[2], y.shape[3]).to(y.device).float().normal_()
         y = torch.cat((y, sampled_noise), 1)
 
         y = self.pixNorm(self.lrelu(self.conv_2(y)))
