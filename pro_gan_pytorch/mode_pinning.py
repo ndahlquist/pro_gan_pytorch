@@ -1,11 +1,11 @@
 import torch
 import torchvision
-import Dataloader
-import os
 import PRO_GAN
 import numpy as np
 from tqdm import tqdm
 import Losses
+import landscape_dataset
+import os
 
 class ModePinningGan():
 
@@ -23,8 +23,7 @@ class ModePinningGan():
             torchvision.transforms.ToTensor(),
           ])
 
-        dataset_dir = os.environ['DATASET_DIR']
-        dataset = Dataloader.FlatDirectoryImageDataset(dataset_dir + '/pexels/landscapes', transform=transforms)
+        dataset = landscape_dataset.maybe_download(transforms)
 
         self.vgg = torchvision.models.vgg13_bn(pretrained=True).to(self.device)
         self.vgg.eval()
@@ -44,14 +43,14 @@ class ModePinningGan():
         self.d = PRO_GAN.Discriminator(6, self.latent_size).to(self.device)
 
         # anchor_optimizer = torch.optim.Adam(list(g.parameters()) + [anchor_latent_vectors], lr=.001)
-        self.anchor_optimizer = torch.optim.Adam(list(self.g.parameters()), lr=.001)
-
+        self.anchor_optimizer = torch.optim.Adam(list(self.g.parameters()), lr=.01)
 
         self.dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=True)
 
-        self.disc_optim = torch.optim.Adam(self.d.parameters())
-        self.gen_optim = torch.optim.Adam(self.g.parameters())
-        self.wgan = Losses.WGAN_GP(self.d, use_gp=False)  # TODO: use_gp=True seems to be causing memory leak
+        self.disc_optim = torch.optim.Adam(self.d.parameters(), lr=.01)
+        self.gen_optim = torch.optim.Adam(self.g.parameters(), lr=.01)
+        # TODO: WGAN_GP(use_gp=True) seems to be causing memory leak
+        self.gan_loss = Losses.RelativisticAverageHingeGAN(self.d)
 
         self.eval_noise = torch.randn(64, self.latent_size, device=self.device)
 
@@ -86,6 +85,8 @@ class ModePinningGan():
         save_image(samples, img_file, nrow=int(np.sqrt(len(samples))), normalize=True)
 
     def optimize_generator_with_anchors(self):
+        self.anchor_optimizer.zero_grad()
+
         generated = self.g(self.anchor_latent_vectors, 5, 0)
         assert self.anchor_targets.shape == generated.shape, "generated shape %s does not match target shape %s" % (str(generated.shape), str(self.anchor_targets.shape))
         loss = torch.mean(torch.abs(self.anchor_targets - generated))
@@ -93,9 +94,9 @@ class ModePinningGan():
 
         loss += perceptual_loss
 
-        self.anchor_optimizer.zero_grad()
         loss.backward()
         self.anchor_optimizer.step()
+        return loss.item()
 
     def optimize_discriminator(self, real_samples):
         self.disc_optim.zero_grad()
@@ -104,40 +105,56 @@ class ModePinningGan():
             noise = torch.randn(int(real_samples.shape[0]), self.latent_size, device=self.device)
             fake_samples = self.g(noise, 5, 0).detach()
 
-        loss = self.wgan.dis_loss(real_samples, fake_samples, 5, 0)
+        loss = self.gan_loss.dis_loss(real_samples, fake_samples, 5, 0)
 
         loss.backward()
         self.disc_optim.step()
 
+        return loss.item()
+
     def optimize_generator(self, real_samples):
+        self.gen_optim.zero_grad()
+
         noise = torch.randn(real_samples.shape[0], self.latent_size, device=self.device)
         fake_samples = self.g(noise, 5, 0).detach()
 
-        loss = self.wgan.gen_loss(real_samples, fake_samples, 0, 5)
+        loss = self.gan_loss.gen_loss(real_samples, fake_samples, 0, 5)
 
-        self.gen_optim.zero_grad()
         loss.backward()
         self.gen_optim.step()
 
-    def train(self, epochs=50*1000):
+        return loss.item()
+
+    def train(self, epochs=5000):
         max_mem_used = 0
+
+        print('{"chart": "Discriminator Loss", "axis": "epochs"}')
+        print('{"chart": "Generator Loss", "axis": "epochs"}')
+        #print('{"chart": "GLO Loss", "axis": "epochs"}')
 
         for epoch in tqdm(range(epochs)):
 
             # For the first phase, just train using the anchors. This is faster.
             if epoch < 500:
-                self.optimize_generator_with_anchors()
+                glo_loss = self.optimize_generator_with_anchors()
+                #print('{"chart": "GLO Loss", "x": "%d", "y": "%f"}' % (epoch, glo_loss))
             else:
+                d_loss = 0
+                g_loss = 0
                 for batch in self.dataloader:
                     batch = batch.to(self.device)
-                    self.optimize_discriminator(batch)
-                    self.optimize_generator(batch)
-                self.optimize_generator_with_anchors()
+                    d_loss += self.optimize_discriminator(batch)
+                    g_loss += self.optimize_generator(batch)
+                print('{"chart": "Discriminator Loss", "x": "%d", "y": "%f"}' % (epoch, d_loss))
+                print('{"chart": "Generator Loss", "x": "%d", "y": "%f"}' % (epoch, g_loss))
+                glo_loss = self.optimize_generator_with_anchors()
+                #print('{"chart": "GLO Loss", "x": "%d", "y": "%f"}' % (epoch, glo_loss))
 
             with torch.no_grad():
                 generated = self.g(self.eval_noise, 5, 0).detach()
 
-                filename = 'samples/%d.png' % epoch
+                output_dir = os.path.expanduser(os.getenv('ARTIFACTS_DIR', 'samples'))
+                filename = output_dir+'/%05d.jpg' % epoch
                 self.create_grid(generated, filename)
 
             # Test for memory leaks.
@@ -157,7 +174,7 @@ class ModePinningGan():
         plt.rcParams['figure.figsize'] = [10, 10]
         plt.imshow(cv2.imread(filename))
         plt.show()"""
-    
+
 
 if __name__ == "__main__":
     ModePinningGan().train()
