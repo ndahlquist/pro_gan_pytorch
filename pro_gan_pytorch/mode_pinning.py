@@ -1,3 +1,4 @@
+from sklearn.decomposition import PCA
 import torch
 import torchvision
 import PRO_GAN
@@ -38,7 +39,8 @@ class ModePinningGan:
         self.dataloader = torch.utils.data.DataLoader(dataset, num_pins, shuffle=True)
         self.anchor_targets = next(iter(self.dataloader)).to(self.device)
 
-        self.anchor_latent_vectors = torch.randn(num_pins, self.latent_size, requires_grad=True, device=self.device)
+        #self.anchor_latent_vectors = torch.randn(num_pins, self.latent_size, requires_grad=True, device=self.device)
+        self.anchor_latent_vectors = self.choose_latent_vectors_with_pca()
 
         self.depth = 6
         self.g = PRO_GAN.Generator(depth=self.depth, latent_size=self.latent_size).to(self.device)
@@ -54,6 +56,25 @@ class ModePinningGan:
         self.gan_loss = Losses.RelativisticAverageHingeGAN(self.d)
 
         self.eval_noise = torch.randn(64, self.latent_size, device=self.device)
+
+    def choose_latent_vectors_with_pca(self):
+        # first, take a subset of train set to fit the PCA
+        #X_pca = self.anchor_targets
+        print("perform PCA...")
+        X_pca = []
+
+        for i in range(3):
+            X_pca.append(self.anchor_targets[i].flatten().numpy())
+            print(type(X_pca[i]))
+
+        pca = PCA(n_components=self.latent_size).fit(X_pca)
+        # then, initialize latent vectors to the pca projections of the complete dataset
+        Z = np.empty((X_pca.shape[0], self.latent_size))
+        #for idx in tqdm(range(X_pca.shape[0])):
+        #    Z[idx] = pca.transform(X_pca.cpu().numpy().reshape(len(X), -1))
+        exit(0)
+
+        return Z
 
     def extract_features(self, x):
         # x = normalize(x)  # TODO
