@@ -33,7 +33,7 @@ class ModePinningGan:
             param.requires_grad = False
 
         num_pins = len(dataset)
-        self.latent_size = 64
+        self.latent_size = 128
         batch_size = 32
 
         self.dataloader = torch.utils.data.DataLoader(dataset, num_pins, shuffle=True)
@@ -233,29 +233,20 @@ class ModePinningGan:
         print('{"chart": "Discriminator Loss", "axis": "epochs"}')
         print('{"chart": "Generator Loss", "axis": "epochs"}')
 
-        for epoch in tqdm(range(5000)):
+        for epoch in tqdm(range(3000)):
 
             # Training schedule.
             if epoch < 1000:
-                depth = 1
+                depth = 0
                 alpha = (epoch % 1000) / 1000.0
             elif epoch < 2000:
+                depth = 1
+                alpha = (epoch % 1000) / 1000.0
+            elif epoch < 3000:
                 depth = 2
                 alpha = (epoch % 1000) / 1000.0
             else:
                 exit(0)
-            """elif epoch < 3000:
-                depth = 3
-                alpha = (epoch % 1000) / 1000.0
-                only_train_with_glo = False
-            elif epoch < 4000:
-                depth = 4
-                alpha = (epoch % 1000) / 1000.0
-                only_train_with_glo = False
-            else:
-                depth = 5
-                alpha = (epoch % 1000) / 1000.0
-                only_train_with_glo = False"""
 
             print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch, depth + alpha))
 
@@ -309,3 +300,4 @@ if __name__ == "__main__":
     #    gan.train()
     #else:
     gan.glo_pretrain()
+    gan.train()
