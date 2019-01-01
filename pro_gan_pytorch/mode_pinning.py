@@ -203,11 +203,10 @@ class ModePinningGan:
             # Training schedule.
             if epoch < 1000:
                 # For the first phase, just train using the anchors. This is faster.
-                depth = epoch // 200
-                alpha = (epoch % 200) / 200.0
+                depth = epoch // 250
+                alpha = (epoch % 250) / 250.0
             else:
                 self.save_checkpoint("glo_pretrain")
-                exit(0)
 
             print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch, depth + alpha))
 
