@@ -58,23 +58,15 @@ class ModePinningGan:
         self.eval_noise = torch.randn(64, self.latent_size, device=self.device)
 
     def choose_latent_vectors_with_pca(self):
-        # first, take a subset of train set to fit the PCA
-        #X_pca = self.anchor_targets
-        print("perform PCA...")
         X_pca = []
 
-        for i in range(3):
+        for i in range(self.anchor_targets.shape[0]):
             X_pca.append(self.anchor_targets[i].flatten().numpy())
-            print(type(X_pca[i]))
 
         pca = PCA(n_components=self.latent_size).fit(X_pca)
-        # then, initialize latent vectors to the pca projections of the complete dataset
-        Z = np.empty((X_pca.shape[0], self.latent_size))
-        #for idx in tqdm(range(X_pca.shape[0])):
-        #    Z[idx] = pca.transform(X_pca.cpu().numpy().reshape(len(X), -1))
-        exit(0)
 
-        return Z
+        # Initialize latent vectors to PCA projections.
+        return torch.tensor(pca.transform(X_pca))
 
     def extract_features(self, x):
         # x = normalize(x)  # TODO
@@ -196,7 +188,6 @@ class ModePinningGan:
         checkpoints_dir = os.path.expanduser(os.getenv('CHECKPOINTS_DIR', 'checkpoints')) + tag
 
         if not os.path.exists(checkpoints_dir + "/gen.pth") or not os.path.exists(checkpoints_dir + "/disc.pth"):
-            print(os.listdir(checkpoints_dir))
             return False
 
         self.g.load_state_dict(torch.load(checkpoints_dir + "/gen.pth"))
@@ -314,7 +305,7 @@ class ModePinningGan:
 if __name__ == "__main__":
     gan = ModePinningGan()
 
-    if gan.restore_checkpoint("glo_pretrain"):
-        gan.train()
-    else:
-        gan.glo_pretrain()
+    #if gan.restore_checkpoint("glo_pretrain"):
+    #    gan.train()
+    #else:
+    gan.glo_pretrain()
