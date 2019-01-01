@@ -33,7 +33,7 @@ class ModePinningGan:
             param.requires_grad = False
 
         num_pins = len(dataset)
-        self.latent_size = 128
+        self.latent_size = 64
         batch_size = 32
 
         self.dataloader = torch.utils.data.DataLoader(dataset, num_pins, shuffle=True)
@@ -61,12 +61,12 @@ class ModePinningGan:
         X_pca = []
 
         for i in range(self.anchor_targets.shape[0]):
-            X_pca.append(self.anchor_targets[i].flatten().numpy())
+            X_pca.append(self.anchor_targets[i].flatten().cpu().numpy())
 
         pca = PCA(n_components=self.latent_size).fit(X_pca)
 
         # Initialize latent vectors to PCA projections.
-        return torch.tensor(pca.transform(X_pca))
+        return torch.tensor(pca.transform(X_pca), device=self.device).float()
 
     def extract_features(self, x):
         # x = normalize(x)  # TODO
