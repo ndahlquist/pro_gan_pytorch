@@ -293,4 +293,4 @@ if __name__ == "__main__":
     #    gan.train()
     #else:
     gan.glo_pretrain()
-    gan.train()
+    gan.train(1000)
