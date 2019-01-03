@@ -1,3 +1,4 @@
+from sklearn.decomposition import PCA
 import torch
 import torchvision
 import PRO_GAN
@@ -38,7 +39,8 @@ class ModePinningGan:
         self.dataloader = torch.utils.data.DataLoader(dataset, num_pins, shuffle=True)
         self.anchor_targets = next(iter(self.dataloader)).to(self.device)
 
-        self.anchor_latent_vectors = torch.randn(num_pins, self.latent_size, requires_grad=True, device=self.device)
+        #self.anchor_latent_vectors = torch.randn(num_pins, self.latent_size, requires_grad=True, device=self.device)
+        self.anchor_latent_vectors = self.choose_latent_vectors_with_pca()
 
         self.depth = 6
         self.g = PRO_GAN.Generator(depth=self.depth, latent_size=self.latent_size).to(self.device)
@@ -54,6 +56,17 @@ class ModePinningGan:
         self.gan_loss = Losses.RelativisticAverageHingeGAN(self.d)
 
         self.eval_noise = torch.randn(64, self.latent_size, device=self.device)
+
+    def choose_latent_vectors_with_pca(self):
+        X_pca = []
+
+        for i in range(self.anchor_targets.shape[0]):
+            X_pca.append(self.anchor_targets[i].flatten().cpu().numpy())
+
+        pca = PCA(n_components=self.latent_size).fit(X_pca)
+
+        # Initialize latent vectors to PCA projections.
+        return torch.tensor(pca.transform(X_pca), device=self.device).float()
 
     def extract_features(self, x):
         # x = normalize(x)  # TODO
@@ -175,7 +188,6 @@ class ModePinningGan:
         checkpoints_dir = os.path.expanduser(os.getenv('CHECKPOINTS_DIR', 'checkpoints')) + tag
 
         if not os.path.exists(checkpoints_dir + "/gen.pth") or not os.path.exists(checkpoints_dir + "/disc.pth"):
-            print(os.listdir(checkpoints_dir))
             return False
 
         self.g.load_state_dict(torch.load(checkpoints_dir + "/gen.pth"))
@@ -183,19 +195,12 @@ class ModePinningGan:
         return True
 
     def glo_pretrain(self):
-        print('{"chart": "Depth", "axis": "epochs"}')
-        print('{"chart": "GLO Loss", "axis": "epochs"}')
+        # For the first phase, just train using the anchors. This is faster.
 
-        for epoch in tqdm(range(5000)):
-
+        for epoch in tqdm(range(1000)):
             # Training schedule.
-            if epoch < 1000:
-                # For the first phase, just train using the anchors. This is faster.
-                depth = epoch // 200
-                alpha = (epoch % 200) / 200.0
-            else:
-                self.save_checkpoint("glo_pretrain")
-                exit(0)
+            depth = epoch // 250
+            alpha = (epoch % 250) / 250.0
 
             print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch, depth + alpha))
 
@@ -213,43 +218,29 @@ class ModePinningGan:
                     filename = samples_dir + '/%05d.%s' % (epoch, "png" if depth < 3 else "jpg")
                     self.create_grid(generated, filename)
 
-    def train(self):
+    def train(self, start_epoch=0):
         max_mem_used = 0
 
-        print('{"chart": "Depth", "axis": "epochs"}')
-        print('{"chart": "GLO Loss", "axis": "epochs"}')
-        print('{"chart": "Discriminator Loss", "axis": "epochs"}')
-        print('{"chart": "Generator Loss", "axis": "epochs"}')
-
-        for epoch in tqdm(range(5000)):
+        for epoch in tqdm(range(3000)):
 
             # Training schedule.
             if epoch < 1000:
-                depth = 1
+                depth = 0
                 alpha = (epoch % 1000) / 1000.0
             elif epoch < 2000:
+                depth = 1
+                alpha = (epoch % 1000) / 1000.0
+            elif epoch < 3000:
                 depth = 2
                 alpha = (epoch % 1000) / 1000.0
             else:
                 exit(0)
-            """elif epoch < 3000:
-                depth = 3
-                alpha = (epoch % 1000) / 1000.0
-                only_train_with_glo = False
-            elif epoch < 4000:
-                depth = 4
-                alpha = (epoch % 1000) / 1000.0
-                only_train_with_glo = False
-            else:
-                depth = 5
-                alpha = (epoch % 1000) / 1000.0
-                only_train_with_glo = False"""
 
-            print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch, depth + alpha))
+            print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch+start_epoch, depth + alpha))
 
             if epoch % 5 == 0:
                 glo_loss = self.optimize_generator_with_anchors(depth, alpha)
-                print('{"chart": "GLO Loss", "x": %d, "y": %.04f}' % (epoch, glo_loss))
+                print('{"chart": "GLO Loss", "x": %d, "y": %.04f}' % (epoch+start_epoch, glo_loss))
 
             d_loss = 0
             g_loss = 0
@@ -257,8 +248,8 @@ class ModePinningGan:
                 batch = batch.to(self.device)
                 d_loss += self.optimize_discriminator(batch, depth, alpha)
                 g_loss += self.optimize_generator(batch, depth, alpha)
-            print('{"chart": "Discriminator Loss", "x": %d, "y": %.04f}' % (epoch, d_loss))
-            print('{"chart": "Generator Loss", "x": %d, "y": %.04f}' % (epoch, g_loss))
+            print('{"chart": "Discriminator Loss", "x": %d, "y": %.04f}' % (epoch+start_epoch, d_loss))
+            print('{"chart": "Generator Loss", "x": %d, "y": %.04f}' % (epoch+start_epoch, g_loss))
 
             if epoch % 5 == 0:
                 with torch.no_grad():
@@ -291,9 +282,15 @@ class ModePinningGan:
 
 
 if __name__ == "__main__":
+    print('{"chart": "Depth", "axis": "epochs"}')
+    print('{"chart": "GLO Loss", "axis": "epochs"}')
+    print('{"chart": "Discriminator Loss", "axis": "epochs"}')
+    print('{"chart": "Generator Loss", "axis": "epochs"}')
+
     gan = ModePinningGan()
 
-    if gan.restore_checkpoint("glo_pretrain"):
-        gan.train()
-    else:
-        gan.glo_pretrain()
+    #if gan.restore_checkpoint("glo_pretrain"):
+    #    gan.train()
+    #else:
+    gan.glo_pretrain()
+    gan.train(1000)
