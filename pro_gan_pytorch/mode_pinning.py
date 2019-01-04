@@ -235,11 +235,13 @@ class ModePinningGan:
             else:
                 exit(0)
 
-            print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch+start_epoch, depth + alpha))
+            epoch += start_epoch
+
+            print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch, depth + alpha))
 
             if epoch % 5 == 0:
                 glo_loss = self.optimize_generator_with_anchors(depth, alpha)
-                print('{"chart": "GLO Loss", "x": %d, "y": %.04f}' % (epoch+start_epoch, glo_loss))
+                print('{"chart": "GLO Loss", "x": %d, "y": %.04f}' % (epoch, glo_loss))
 
             d_loss = 0
             g_loss = 0
@@ -247,19 +249,18 @@ class ModePinningGan:
                 batch = batch.to(self.device)
                 d_loss += self.optimize_discriminator(batch, depth, alpha)
                 g_loss += self.optimize_generator(batch, depth, alpha)
-            print('{"chart": "Discriminator Loss", "x": %d, "y": %.04f}' % (epoch+start_epoch, d_loss))
-            print('{"chart": "Generator Loss", "x": %d, "y": %.04f}' % (epoch+start_epoch, g_loss))
+            print('{"chart": "Discriminator Loss", "x": %d, "y": %.04f}' % (epoch, d_loss))
+            print('{"chart": "Generator Loss", "x": %d, "y": %.04f}' % (epoch, g_loss))
 
-            if epoch % 5 == 0:
-                with torch.no_grad():
-                    # Demo both random and pinned latent vectors.
-                    latent_vectors = torch.cat((self.anchor_latent_vectors[:18], self.eval_noise[:18]), 0)
-                    generated = self.g(latent_vectors, depth, alpha).detach()
+            with torch.no_grad():
+                # Demo both random and pinned latent vectors.
+                latent_vectors = torch.cat((self.anchor_latent_vectors[:18], self.eval_noise[:18]), 0)
+                generated = self.g(latent_vectors, depth, alpha).detach()
 
-                    samples_dir = os.path.expanduser(os.getenv('SAMPLES_DIR', 'samples'))
-                    os.makedirs(samples_dir, exist_ok=True)
-                    filename = samples_dir+'/%05d.%s' % (epoch, "png" if depth < 3 else "jpg")
-                    self.create_grid(generated, filename)
+                samples_dir = os.path.expanduser(os.getenv('SAMPLES_DIR', 'samples'))
+                os.makedirs(samples_dir, exist_ok=True)
+                filename = samples_dir+'/%05d.%s' % (epoch, "png" if depth < 3 else "jpg")
+                self.create_grid(generated, filename)
 
             # Test for CUDA memory leaks.
             if torch.cuda.device_count() > 0 and torch.cuda.max_memory_allocated() > max_mem_used:
