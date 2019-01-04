@@ -2,7 +2,6 @@ import os
 
 import av
 import cv2
-import numpy as np
 from tqdm import tqdm
 import glob
 
@@ -19,15 +18,15 @@ if os.path.exists(output_filename):
 
 output_file = av.open(output_filename, 'w')
 output_video_stream = output_file.add_stream("mpeg4", 24)
-output_video_stream.width = im.shape[0]
-output_video_stream.height = im.shape[1]
+output_video_stream.width = 640
+output_video_stream.height = 640
 output_video_stream.bit_rate = 16000000
 output_video_stream.bit_rate_tolerance = 16000000
 
 skip_rate = 1
 
 font = cv2.FONT_HERSHEY_SIMPLEX
-bottomLeftCornerOfText = (10, im.shape[1] - 10)
+bottomLeftCornerOfText = (10, output_video_stream.height - 10)
 fontScale = 1
 fontColor = (255, 255, 255)
 lineType = 2
@@ -39,7 +38,7 @@ for i, filename in enumerate(tqdm(files)):
         continue
 
     im = cv2.imread(filename)
-    #im = cv2.resize(im, (512, 512))
+    im = cv2.resize(im, (output_video_stream.width, output_video_stream.height), interpolation=cv2.INTER_NEAREST)
 
     (epoch,) = parse("samples/{:d}.png", filename)
 
