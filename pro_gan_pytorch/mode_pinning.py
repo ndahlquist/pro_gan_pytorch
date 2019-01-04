@@ -220,18 +220,18 @@ class ModePinningGan:
     def train(self, start_epoch=0):
         max_mem_used = 0
 
-        for epoch in tqdm(range(3000)):
+        for epoch in tqdm(range(300)):
 
             # Training schedule.
-            if epoch < 1000:
+            if epoch < 100:
                 depth = 0
-                alpha = (epoch % 1000) / 1000.0
-            elif epoch < 2000:
+                alpha = (epoch % 100) / 100.0
+            elif epoch < 100:
                 depth = 1
-                alpha = (epoch % 1000) / 1000.0
-            elif epoch < 3000:
+                alpha = (epoch % 100) / 100.0
+            elif epoch < 100:
                 depth = 2
-                alpha = (epoch % 1000) / 1000.0
+                alpha = (epoch % 100) / 100.0
             else:
                 exit(0)
 
@@ -239,9 +239,8 @@ class ModePinningGan:
 
             print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch, depth + alpha))
 
-            if epoch % 5 == 0:
-                glo_loss = self.optimize_generator_with_anchors(depth, alpha)
-                print('{"chart": "GLO Loss", "x": %d, "y": %.04f}' % (epoch, glo_loss))
+            glo_loss = self.optimize_generator_with_anchors(depth, alpha)
+            print('{"chart": "GLO Loss", "x": %d, "y": %.04f}' % (epoch, glo_loss))
 
             d_loss = 0
             g_loss = 0
