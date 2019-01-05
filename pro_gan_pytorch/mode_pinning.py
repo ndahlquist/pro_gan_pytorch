@@ -1,3 +1,4 @@
+import shutil
 from sklearn.decomposition import PCA
 import torch
 import torchvision
@@ -32,7 +33,7 @@ class ModePinningGan:
         for param in self.vgg.parameters():
             param.requires_grad = False
 
-        num_pins = len(dataset)
+        num_pins = 128  #len(dataset)
         self.latent_size = 128
         batch_size = 32
 
@@ -50,8 +51,8 @@ class ModePinningGan:
 
         self.dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=True)
 
-        self.disc_optim = torch.optim.Adam(self.d.parameters(), lr=.001)
-        self.gen_optim = torch.optim.Adam(self.g.parameters(), lr=.001)
+        self.disc_optim = torch.optim.Adam(self.d.parameters(), lr=.00005)
+        self.gen_optim = torch.optim.Adam(self.g.parameters(), lr=.00005)
         self.gan_loss = Losses.WGAN_GP(self.d, use_gp=True)
 
         self.eval_noise = torch.randn(64, self.latent_size, device=self.device)
@@ -177,15 +178,13 @@ class ModePinningGan:
         # return the so computed real_samples
         return real_samples
 
-    def save_checkpoint(self, tag):
-        checkpoints_dir = os.path.expanduser(os.getenv('CHECKPOINTS_DIR', 'checkpoints')) + tag
+    def save_checkpoint(self):
+        checkpoints_dir = os.path.expanduser(os.getenv('ARTIFACTS_DIR', 'artifacts')) + "/checkpoints"
         os.makedirs(checkpoints_dir, exist_ok=True)
         torch.save(self.g.state_dict(), checkpoints_dir + "/gen.pth")
         torch.save(self.d.state_dict(), checkpoints_dir + "/disc.pth")
 
-    def restore_checkpoint(self, tag):
-        checkpoints_dir = os.path.expanduser(os.getenv('CHECKPOINTS_DIR', 'checkpoints')) + tag
-
+    def restore_checkpoint(self, checkpoints_dir):
         if not os.path.exists(checkpoints_dir + "/gen.pth") or not os.path.exists(checkpoints_dir + "/disc.pth"):
             return False
 
@@ -196,7 +195,7 @@ class ModePinningGan:
     def glo_pretrain(self):
         # For the first phase, just train using the anchors. This is faster.
 
-        for epoch in tqdm(range(1000)):
+        for epoch in tqdm(range(1250)):
             # Training schedule.
             depth = epoch // 250
             alpha = (epoch % 250) / 250.0
@@ -212,7 +211,7 @@ class ModePinningGan:
                     latent_vectors = torch.cat((self.anchor_latent_vectors[:18], self.eval_noise[:18]), 0)
                     generated = self.g(latent_vectors, depth, alpha).detach()
 
-                    samples_dir = os.path.expanduser(os.getenv('SAMPLES_DIR', 'samples'))
+                    samples_dir = os.path.expanduser(os.getenv('ARTIFACTS_DIR', 'artifacts')) + "/samples"
                     os.makedirs(samples_dir, exist_ok=True)
                     filename = samples_dir + '/%05d.%s' % (epoch, "png" if depth < 3 else "jpg")
                     self.create_grid(generated, filename)
@@ -220,20 +219,13 @@ class ModePinningGan:
     def train(self, start_epoch=0):
         max_mem_used = 0
 
-        for epoch in tqdm(range(300)):
+        num_epochs_per_depth = 1000
+
+        for epoch in tqdm(range(6 * num_epochs_per_depth)):
 
             # Training schedule.
-            if epoch < 100:
-                depth = 0
-                alpha = (epoch % 100) / 100.0
-            elif epoch < 100:
-                depth = 1
-                alpha = (epoch % 100) / 100.0
-            elif epoch < 100:
-                depth = 2
-                alpha = (epoch % 100) / 100.0
-            else:
-                exit(0)
+            depth = epoch // num_epochs_per_depth
+            alpha = (epoch % num_epochs_per_depth) / num_epochs_per_depth
 
             epoch += start_epoch
 
@@ -251,15 +243,18 @@ class ModePinningGan:
             print('{"chart": "Discriminator Loss", "x": %d, "y": %.04f}' % (epoch, d_loss))
             print('{"chart": "Generator Loss", "x": %d, "y": %.04f}' % (epoch, g_loss))
 
-            with torch.no_grad():
-                # Demo both random and pinned latent vectors.
-                latent_vectors = torch.cat((self.anchor_latent_vectors[:18], self.eval_noise[:18]), 0)
-                generated = self.g(latent_vectors, depth, alpha).detach()
+            if epoch % 10 == 0:
+                with torch.no_grad():
+                    # Demo both random and pinned latent vectors.
+                    latent_vectors = torch.cat((self.anchor_latent_vectors[:18], self.eval_noise[:18]), 0)
+                    generated = self.g(latent_vectors, depth, alpha).detach()
 
-                samples_dir = os.path.expanduser(os.getenv('SAMPLES_DIR', 'samples'))
-                os.makedirs(samples_dir, exist_ok=True)
-                filename = samples_dir+'/%05d.%s' % (epoch, "png" if depth < 3 else "jpg")
-                self.create_grid(generated, filename)
+                    samples_dir = os.path.expanduser(os.getenv('ARTIFACTS_DIR', 'artifacts')) + "/samples"
+                    os.makedirs(samples_dir, exist_ok=True)
+                    filename = samples_dir+'/%05d.%s' % (epoch, "png" if depth < 3 else "jpg")
+                    self.create_grid(generated, filename)
+                    shutil.copy(filename, "/persistent/")
+                    self.save_checkpoint()
 
             # Test for CUDA memory leaks.
             if torch.cuda.device_count() > 0 and torch.cuda.max_memory_allocated() > max_mem_used:
@@ -287,9 +282,5 @@ if __name__ == "__main__":
     print('{"chart": "Generator Loss", "axis": "epochs"}')
 
     gan = ModePinningGan()
-
-    #if gan.restore_checkpoint("glo_pretrain"):
-    #    gan.train()
-    #else:
     gan.glo_pretrain()
-    gan.train(1000)
+    gan.train(1250)

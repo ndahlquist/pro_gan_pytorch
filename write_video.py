@@ -7,8 +7,8 @@ import glob
 
 from parse import parse
 
-files = [s for s in glob.glob("samples/*.png") if os.path.isfile(s)]
-files.sort(key=lambda s: os.path.getmtime(s))
+files = [s for s in glob.glob("samples/*") if os.path.isfile(s)]
+files.sort()
 
 im = cv2.imread(files[0])
 
@@ -33,6 +33,7 @@ lineType = 2
 
 print("Encoding video.")
 for i, filename in enumerate(tqdm(files)):
+    print(filename)
 
     if i % skip_rate != 0:
         continue
@@ -40,7 +41,10 @@ for i, filename in enumerate(tqdm(files)):
     im = cv2.imread(filename)
     im = cv2.resize(im, (output_video_stream.width, output_video_stream.height), interpolation=cv2.INTER_NEAREST)
 
-    (epoch,) = parse("samples/{:d}.png", filename)
+    try:
+        (epoch,) = parse("samples/{:d}.png", filename)
+    except Exception as e:
+        (epoch,) = parse("samples/{:d}.jpg", filename)
 
     text = '%d' % (epoch)
     cv2.putText(im, text, bottomLeftCornerOfText, font, fontScale, fontColor, lineType)

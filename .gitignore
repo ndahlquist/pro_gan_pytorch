@@ -105,3 +105,5 @@ venv.bak/
 
 # ignore pycharm data
 .idea/
+samples/
+out.mp4
