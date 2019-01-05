@@ -8,7 +8,7 @@ import Dataloader
 import tqdm
 
 _torch_home = os.path.expanduser(os.getenv('TORCH_HOME', '~/.torch'))
-_directory = os.path.expanduser(_torch_home + "/.datasets/pexels_landscapes/")
+_directory = os.path.expanduser(_torch_home + "/datasets/pexels_landscapes/")
 
 
 def _download_file(filename):
