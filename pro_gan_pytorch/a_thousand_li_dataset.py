@@ -34,6 +34,10 @@ class AThousandLiDataset(Dataset):
 
         crop = cv2.resize(crop, (self.output_shape, self.output_shape), interpolation=cv2.INTER_AREA)
 
+        # Random horizontal flip.
+        if random.randint(0, 1) == 0:
+            crop = cv2.flip(crop, 1)
+
         crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
 
         return torch.tensor(crop).float().permute(2, 0, 1) / 256
@@ -57,5 +61,7 @@ def maybe_download():
 if __name__ == "__main__":
     dataset = maybe_download()
     for i in range(30):
-        cv2.imshow('im', dataset[0])
+        crop = dataset[0].permute(1,2,0).numpy()
+        print(crop.shape)
+        cv2.imshow('im', crop)
         cv2.waitKey()
