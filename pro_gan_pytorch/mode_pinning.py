@@ -6,7 +6,7 @@ import PRO_GAN
 import numpy as np
 from tqdm import tqdm
 import Losses
-import landscape_dataset
+import a_thousand_li_dataset
 import os
 
 
@@ -17,16 +17,7 @@ class ModePinningGan:
         # select the device to be used for training
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        transforms = torchvision.transforms.Compose([
-            torchvision.transforms.RandomRotation(3),
-            torchvision.transforms.RandomCrop((128, 128)),  # TODO: Random scale too
-            torchvision.transforms.Resize((128, 128)),
-            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.ColorJitter(.2, .2, .1, .01),
-            torchvision.transforms.ToTensor(),
-          ])
-
-        dataset = landscape_dataset.maybe_download(transforms)
+        dataset = a_thousand_li_dataset.maybe_download()
 
         self.vgg = torchvision.models.vgg13_bn(pretrained=True).to(self.device)
         self.vgg.eval()
@@ -219,7 +210,7 @@ class ModePinningGan:
     def train(self, start_epoch=0):
         max_mem_used = 0
 
-        num_epochs_per_depth = 1000
+        num_epochs_per_depth = 400
 
         for epoch in tqdm(range(6 * num_epochs_per_depth)):
 
@@ -235,12 +226,15 @@ class ModePinningGan:
             print('{"chart": "GLO Loss", "x": %d, "y": %.04f}' % (epoch, glo_loss))
 
             d_loss = 0
-            g_loss = 0
             for batch in self.dataloader:
                 batch = batch.to(self.device)
                 d_loss += self.optimize_discriminator(batch, depth, alpha)
-                g_loss += self.optimize_generator(batch, depth, alpha)
             print('{"chart": "Discriminator Loss", "x": %d, "y": %.04f}' % (epoch, d_loss))
+
+            g_loss = 0
+            for batch in self.dataloader:
+                batch = batch.to(self.device)
+                g_loss += self.optimize_generator(batch, depth, alpha)
             print('{"chart": "Generator Loss", "x": %d, "y": %.04f}' % (epoch, g_loss))
 
             if epoch % 10 == 0:
