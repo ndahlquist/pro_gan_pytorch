@@ -124,7 +124,7 @@ class WGAN_GP(GANLoss):
 
         # create the merge of both real and fake samples
         merged = epsilon * real_samps + ((1 - epsilon) * fake_samps)
-        merged = merged.cuda(fake_samps.device)
+        merged = merged.to(fake_samps.device)
         merged = th.autograd.Variable(merged, requires_grad=True)
 
         # forward pass
@@ -132,7 +132,7 @@ class WGAN_GP(GANLoss):
 
         # perform backward pass from op to merged for obtaining the gradients
         gradient = th.autograd.grad(outputs=op, inputs=merged,
-                                    grad_outputs=th.ones(op.size()).cuda(fake_samps.device),
+                                    grad_outputs=th.ones(op.size()).to(fake_samps.device),
                                     create_graph=True, retain_graph=True, only_inputs=True)[0]
 
         # calculate the penalty using these gradients
