@@ -187,9 +187,11 @@ class ModePinningGan:
         # For the first phase, just train using the anchors. This is faster.
 
         num_epochs_per_depth = 250
-        for epoch in tqdm(range(num_epochs_per_depth * self.depth)):
+        for epoch in tqdm(range(num_epochs_per_depth * (self.depth + 1))):
             # Training schedule.
             depth = epoch // num_epochs_per_depth
+            if depth > self.depth:
+                depth = self.depth
             alpha = (epoch % num_epochs_per_depth) / float(num_epochs_per_depth)
 
             print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch, depth + alpha))
@@ -278,4 +280,4 @@ if __name__ == "__main__":
 
     gan = ModePinningGan()
     gan.glo_pretrain()
-    gan.train(1250)
+    #gan.train(1250)

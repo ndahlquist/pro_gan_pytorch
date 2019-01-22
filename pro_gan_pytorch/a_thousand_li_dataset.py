@@ -21,11 +21,11 @@ class AThousandLiDataset(Dataset):
         self.full_image = cv2.imread(_directory + 'a_thousand_li.jpg')[:, 2000:-1000, :]
 
     def __len__(self):
-        return 500
+        return 5000
 
     def __getitem__(self, i):
 
-        crop_size = int(self.output_shape * random.uniform(1.0, 2.0))
+        crop_size = int(self.output_shape * random.uniform(2.0, 4.0))
 
         x = random.randint(0, self.full_image.shape[1] - crop_size)
         y = random.randint(0, self.full_image.shape[0] - crop_size)
