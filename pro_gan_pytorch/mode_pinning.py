@@ -186,11 +186,11 @@ class ModePinningGan:
     def glo_pretrain(self):
         # For the first phase, just train using the anchors. This is faster.
 
-        epochs_per_depth = 250
-        for epoch in tqdm(range(epochs_per_depth * self.depth)):
+        num_epochs_per_depth = 250
+        for epoch in tqdm(range(num_epochs_per_depth * self.depth)):
             # Training schedule.
-            depth = epoch // epochs_per_depth
-            alpha = (epoch % epochs_per_depth) / float(epochs_per_depth)
+            depth = epoch // num_epochs_per_depth
+            alpha = (epoch % num_epochs_per_depth) / float(num_epochs_per_depth)
 
             print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch, depth + alpha))
 
@@ -213,7 +213,7 @@ class ModePinningGan:
 
         num_epochs_per_depth = 400
 
-        for epoch in tqdm(range(6 * num_epochs_per_depth)):
+        for epoch in tqdm(range(num_epochs_per_depth)):
 
             # Training schedule.
             depth = epoch // num_epochs_per_depth
