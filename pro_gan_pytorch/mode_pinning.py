@@ -34,17 +34,17 @@ class ModePinningGan:
         #self.anchor_latent_vectors = torch.randn(num_pins, self.latent_size, requires_grad=True, device=self.device)
         self.anchor_latent_vectors = self.choose_latent_vectors_with_pca()
 
-        self.depth = 6
-        self.g = PRO_GAN.Generator(depth=self.depth, latent_size=self.latent_size).to(self.device)
-        self.d = PRO_GAN.Discriminator(self.depth, self.latent_size).to(self.device)
+        self.depth = 3
+        self.g0 = PRO_GAN.Generator(depth=self.depth, latent_size=self.latent_size).to(self.device)
+        self.d0 = PRO_GAN.Discriminator(self.depth, self.latent_size).to(self.device)
 
-        self.anchor_optimizer = torch.optim.Adam(list(self.g.parameters()) + [self.anchor_latent_vectors], lr=.01)
+        self.anchor_optimizer = torch.optim.Adam(list(self.g0.parameters()) + [self.anchor_latent_vectors], lr=.01)
 
         self.dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=True)
 
-        self.disc_optim = torch.optim.Adam(self.d.parameters(), lr=.00005)
-        self.gen_optim = torch.optim.Adam(self.g.parameters(), lr=.00005)
-        self.gan_loss = Losses.WGAN_GP(self.d, use_gp=True)
+        self.d0_optim = torch.optim.Adam(self.d0.parameters(), lr=.00005)
+        self.g0_optim = torch.optim.Adam(self.g0.parameters(), lr=.00005)
+        self.gan_loss = Losses.WGAN_GP(self.d0, use_gp=True)
 
         self.eval_noise = torch.randn(64, self.latent_size, device=self.device)
 
@@ -94,7 +94,7 @@ class ModePinningGan:
 
         real_samples = self.__progressive_downsampling(self.anchor_targets, depth, alpha)
 
-        generated = self.g(self.anchor_latent_vectors, depth, alpha)
+        generated = self.g0(self.anchor_latent_vectors, depth, alpha)
         assert generated.shape == real_samples.shape, "generated shape %s does not match target shape %s" % (str(generated.shape), str(real_samples.shape))
         loss = torch.mean(torch.abs(real_samples - generated))
         perceptual_loss = torch.mean(torch.abs(self.extract_features(real_samples) - self.extract_features(generated)))
@@ -106,35 +106,35 @@ class ModePinningGan:
         return loss.item()
 
     def optimize_discriminator(self, real_samples, depth, alpha):
-        self.disc_optim.zero_grad()
+        self.d0_optim.zero_grad()
 
         real_samples = self.__progressive_downsampling(real_samples, depth, alpha)
 
         with torch.no_grad():
             noise = torch.randn(int(real_samples.shape[0]), self.latent_size, device=self.device)
-            fake_samples = self.g(noise, depth, alpha).detach()
+            fake_samples = self.g0(noise, depth, alpha).detach()
 
         assert fake_samples.shape == real_samples.shape
         loss = self.gan_loss.dis_loss(real_samples, fake_samples, depth, alpha)
 
         loss.backward()
-        self.disc_optim.step()
+        self.d0_optim.step()
 
         return loss.item()
 
     def optimize_generator(self, real_samples, depth, alpha):
-        self.gen_optim.zero_grad()
+        self.g0_optim.zero_grad()
 
         real_samples = self.__progressive_downsampling(real_samples, depth, alpha)
 
         noise = torch.randn(real_samples.shape[0], self.latent_size, device=self.device)
-        fake_samples = self.g(noise, depth, alpha)
+        fake_samples = self.g0(noise, depth, alpha)
 
         assert fake_samples.shape == real_samples.shape
         loss = self.gan_loss.gen_loss(real_samples, fake_samples, depth, alpha)
 
         loss.backward()
-        self.gen_optim.step()
+        self.g0_optim.step()
 
         return loss.item()
 
@@ -172,24 +172,25 @@ class ModePinningGan:
     def save_checkpoint(self):
         checkpoints_dir = os.path.expanduser(os.getenv('ARTIFACTS_DIR', 'artifacts')) + "/checkpoints"
         os.makedirs(checkpoints_dir, exist_ok=True)
-        torch.save(self.g.state_dict(), checkpoints_dir + "/gen.pth")
-        torch.save(self.d.state_dict(), checkpoints_dir + "/disc.pth")
+        torch.save(self.g0.state_dict(), checkpoints_dir + "/gen.pth")
+        torch.save(self.d0.state_dict(), checkpoints_dir + "/disc.pth")
 
     def restore_checkpoint(self, checkpoints_dir):
         if not os.path.exists(checkpoints_dir + "/gen.pth") or not os.path.exists(checkpoints_dir + "/disc.pth"):
             return False
 
-        self.g.load_state_dict(torch.load(checkpoints_dir + "/gen.pth"))
-        self.d.load_state_dict(torch.load(checkpoints_dir + "/disc.pth"))
+        self.g0.load_state_dict(torch.load(checkpoints_dir + "/gen.pth"))
+        self.d0.load_state_dict(torch.load(checkpoints_dir + "/disc.pth"))
         return True
 
     def glo_pretrain(self):
         # For the first phase, just train using the anchors. This is faster.
 
-        for epoch in tqdm(range(1250)):
+        epochs_per_depth = 250
+        for epoch in tqdm(range(epochs_per_depth * self.depth)):
             # Training schedule.
-            depth = epoch // 250
-            alpha = (epoch % 250) / 250.0
+            depth = epoch // epochs_per_depth
+            alpha = (epoch % epochs_per_depth) / float(epochs_per_depth)
 
             print('{"chart": "Depth", "x": %d, "y": %.02f}' % (epoch, depth + alpha))
 
@@ -200,7 +201,7 @@ class ModePinningGan:
                 with torch.no_grad():
                     # Demo both random and pinned latent vectors.
                     latent_vectors = torch.cat((self.anchor_latent_vectors[:18], self.eval_noise[:18]), 0)
-                    generated = self.g(latent_vectors, depth, alpha).detach()
+                    generated = self.g0(latent_vectors, depth, alpha).detach()
 
                     samples_dir = os.path.expanduser(os.getenv('ARTIFACTS_DIR', 'artifacts')) + "/samples"
                     os.makedirs(samples_dir, exist_ok=True)
@@ -241,7 +242,7 @@ class ModePinningGan:
                 with torch.no_grad():
                     # Demo both random and pinned latent vectors.
                     latent_vectors = torch.cat((self.anchor_latent_vectors[:18], self.eval_noise[:18]), 0)
-                    generated = self.g(latent_vectors, depth, alpha).detach()
+                    generated = self.g0(latent_vectors, depth, alpha).detach()
 
                     samples_dir = os.path.expanduser(os.getenv('ARTIFACTS_DIR', 'artifacts')) + "/samples"
                     os.makedirs(samples_dir, exist_ok=True)

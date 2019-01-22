@@ -16,7 +16,7 @@ _url = "https://github.com/ndahlquist/pro_gan_pytorch/raw/a_thousand_li/data/a_t
 class AThousandLiDataset(Dataset):
 
     def __init__(self, shape=128):
-        self.output_shape = shape
+        self.output_shape = 16
 
         self.full_image = cv2.imread(_directory + 'a_thousand_li.jpg')[:, 2000:-1000, :]
 
@@ -25,7 +25,7 @@ class AThousandLiDataset(Dataset):
 
     def __getitem__(self, i):
 
-        crop_size = int(self.output_shape * random.uniform(2.0, 7.0))
+        crop_size = int(self.output_shape * random.uniform(1.0, 2.0))
 
         x = random.randint(0, self.full_image.shape[1] - crop_size)
         y = random.randint(0, self.full_image.shape[0] - crop_size)
