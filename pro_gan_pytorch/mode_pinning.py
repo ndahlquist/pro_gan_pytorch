@@ -24,7 +24,7 @@ class ModePinningGan:
         for param in self.vgg.parameters():
             param.requires_grad = False
 
-        num_pins = 128  #len(dataset)
+        num_pins = 2048  #len(dataset)
         self.latent_size = 128
         batch_size = 32
 
