@@ -186,8 +186,8 @@ class ModePinningGan:
     def glo_pretrain(self):
         # For the first phase, just train using the anchors. This is faster.
 
-        num_epochs_per_depth = 250
-        for epoch in tqdm(range(num_epochs_per_depth * (self.depth + 1))):
+        num_epochs_per_depth = 1000
+        for epoch in tqdm(range(num_epochs_per_depth * self.depth)):
             # Training schedule.
             depth = epoch // num_epochs_per_depth
             if depth > self.depth:
