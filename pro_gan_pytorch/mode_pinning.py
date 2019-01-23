@@ -213,9 +213,9 @@ class ModePinningGan:
     def train(self, start_epoch=0):
         max_mem_used = 0
 
-        num_epochs_per_depth = 400
+        num_epochs_per_depth = 1000
 
-        for epoch in tqdm(range(num_epochs_per_depth)):
+        for epoch in tqdm(range(num_epochs_per_depth * self.depth)):
 
             # Training schedule.
             depth = epoch // num_epochs_per_depth
@@ -280,4 +280,4 @@ if __name__ == "__main__":
 
     gan = ModePinningGan()
     gan.glo_pretrain()
-    #gan.train(1250)
+    gan.train(3000)
