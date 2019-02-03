@@ -213,7 +213,7 @@ class ModePinningGan:
     def train(self, start_epoch=0):
         max_mem_used = 0
 
-        num_epochs_per_depth = 2000
+        num_epochs_per_depth = 5000
 
         for epoch in tqdm(range(num_epochs_per_depth * self.depth)):
 
@@ -228,19 +228,17 @@ class ModePinningGan:
             glo_loss = self.optimize_generator_with_anchors(depth, alpha)
             print('{"chart": "GLO Loss", "x": %d, "y": %.04f}' % (epoch, glo_loss))
 
-            d_loss = 0
-            for batch in self.dataloader:
-                batch = batch.to(self.device)
-                d_loss += self.optimize_discriminator(batch, depth, alpha)
+            batch = next(self.dataloader)
+            batch = batch.to(self.device)
+            d_loss = self.optimize_discriminator(batch, depth, alpha)
             print('{"chart": "Discriminator Loss", "x": %d, "y": %.04f}' % (epoch, d_loss))
 
-            g_loss = 0
-            for batch in self.dataloader:
-                batch = batch.to(self.device)
-                g_loss += self.optimize_generator(batch, depth, alpha)
+            batch = next(self.dataloader)
+            batch = batch.to(self.device)
+            g_loss = self.optimize_generator(batch, depth, alpha)
             print('{"chart": "Generator Loss", "x": %d, "y": %.04f}' % (epoch, g_loss))
 
-            if epoch % 20 == 0:
+            if epoch % 50 == 0:
                 with torch.no_grad():
                     # Demo both random and pinned latent vectors.
                     latent_vectors = torch.cat((self.anchor_latent_vectors[:18], self.eval_noise[:18]), 0)
