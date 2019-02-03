@@ -24,7 +24,7 @@ class ModePinningGan:
         for param in self.vgg.parameters():
             param.requires_grad = False
 
-        num_pins = 2048  #len(dataset)
+        num_pins = 512  #len(dataset)
         self.latent_size = 128
         batch_size = 32
 
@@ -213,7 +213,7 @@ class ModePinningGan:
     def train(self, start_epoch=0):
         max_mem_used = 0
 
-        num_epochs_per_depth = 1000
+        num_epochs_per_depth = 2000
 
         for epoch in tqdm(range(num_epochs_per_depth * self.depth)):
 
@@ -240,7 +240,7 @@ class ModePinningGan:
                 g_loss += self.optimize_generator(batch, depth, alpha)
             print('{"chart": "Generator Loss", "x": %d, "y": %.04f}' % (epoch, g_loss))
 
-            if epoch % 10 == 0:
+            if epoch % 20 == 0:
                 with torch.no_grad():
                     # Demo both random and pinned latent vectors.
                     latent_vectors = torch.cat((self.anchor_latent_vectors[:18], self.eval_noise[:18]), 0)
